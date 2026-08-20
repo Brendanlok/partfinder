@@ -1,19 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
-
+// Runs server-side on Supabase Edge Functions (Deno). Keeps TAVILY_API_KEY / GEMINI_API_KEY
+// secret - only the anon/publishable key (safe to expose) reaches the static frontend.
 const LISTING_SITES = ["mobile.de", "autoscout24.de", "kleinanzeigen.de"];
 
-// ponytail: no caching/dedupe across requests yet, add if free-tier quotas get tight
-export async function POST(req: NextRequest) {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   const { want } = await req.json();
   if (!want || typeof want !== "string") {
-    return NextResponse.json({ error: "Describe the car you want." }, { status: 400 });
+    return Response.json({ error: "Describe the car you want." }, { status: 400, headers: corsHeaders });
   }
 
   const tavilyRes = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      api_key: process.env.TAVILY_API_KEY,
+      api_key: Deno.env.get("TAVILY_API_KEY"),
       query: `${want} gebraucht kaufen Germany used car listing`,
       include_domains: LISTING_SITES,
       search_depth: "advanced",
@@ -21,7 +29,7 @@ export async function POST(req: NextRequest) {
     }),
   });
   if (!tavilyRes.ok) {
-    return NextResponse.json({ error: "Search failed, try again." }, { status: 502 });
+    return Response.json({ error: "Search failed, try again." }, { status: 502, headers: corsHeaders });
   }
   const tavilyData = await tavilyRes.json();
   // ponytail: Tavily's include_domains isn't a hard filter in practice, so enforce it ourselves
@@ -29,11 +37,11 @@ export async function POST(req: NextRequest) {
     LISTING_SITES.some((site) => new URL(r.url).hostname.endsWith(site))
   );
   if (rawResults.length === 0) {
-    return NextResponse.json({ listings: [] });
+    return Response.json({ listings: [] }, { headers: corsHeaders });
   }
 
   const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -82,11 +90,11 @@ export async function POST(req: NextRequest) {
     }
   );
   if (!geminiRes.ok) {
-    return NextResponse.json({ error: "Couldn't read the results, try again." }, { status: 502 });
+    return Response.json({ error: "Couldn't read the results, try again." }, { status: 502, headers: corsHeaders });
   }
   const geminiData = await geminiRes.json();
   const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
   const parsed = JSON.parse(text);
 
-  return NextResponse.json({ listings: parsed.listings ?? [] });
-}
+  return Response.json({ listings: parsed.listings ?? [] }, { headers: corsHeaders });
+});

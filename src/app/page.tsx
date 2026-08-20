@@ -24,9 +24,12 @@ export default function Home() {
     setError("");
     setListings(null);
     try {
-      const res = await fetch("/api/search", {
+      const res = await fetch(process.env.NEXT_PUBLIC_SEARCH_FUNCTION_URL as string, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
+        },
         body: JSON.stringify({ want }),
       });
       const data = await res.json();

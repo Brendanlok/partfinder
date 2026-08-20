@@ -1,0 +1,46 @@
+name: Deploy to GitHub Pages
+
+# Static export (no server code - the search backend is a Supabase Edge Function,
+# see supabase/functions/search). Served at https://brendanlok.github.io/partfinder/,
+# so basePath is set at build time. Repo must stay public - GitHub Pages via Actions
+# needs a paid plan on private repos.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      NEXT_PUBLIC_BASE_PATH: /partfinder
+      # Not secret by design - this is the public "anon" key the Edge Function's CORS
+      # gateway expects; the actual API keys stay server-side as Supabase function secrets.
+      NEXT_PUBLIC_SEARCH_FUNCTION_URL: https://ekcnpuwclkjnqnntlvot.supabase.co/functions/v1/search
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_pfng2gwF0IdAZfwbwhWPWQ_bfHOMIAC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npx next build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+      - id: deployment
+        uses: actions/deploy-pages@v4
