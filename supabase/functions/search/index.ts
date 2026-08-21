@@ -13,6 +13,48 @@ function isSingleListingUrl(url: string): boolean {
   return false;
 }
 
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+// Tavily's domain-restricted car search usually surfaces category/hub pages rather than
+// single-ad permalinks (verified directly: for common queries almost every result is a
+// hub page). Both real ad sites embed genuine ad links in a hub page's HTML - kleinanzeigen
+// as plain hrefs, autoscout24 as quoted JSON paths - so crawl those instead of giving up.
+// mobile.de blocks all automated fetches (see verdict/index.ts), so it can't be crawled.
+const AD_PATH_PATTERN: Record<string, RegExp> = {
+  "kleinanzeigen.de": /"(\/s-anzeige\/[^"]+)"/g,
+  "autoscout24.de": /"(\/angebote\/[^"]+)"/g,
+};
+
+async function crawlForListingUrls(hubUrl: string): Promise<string[]> {
+  const site = Object.keys(AD_PATH_PATTERN).find((s) => new URL(hubUrl).hostname.endsWith(s));
+  if (!site) return [];
+  try {
+    const res = await fetch(hubUrl, { headers: { "User-Agent": UA } });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const paths = [...html.matchAll(AD_PATH_PATTERN[site])].map((m) => m[1]);
+    return [...new Set(paths)].map((p) => new URL(p, hubUrl).href).slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+// Real title/description straight from the ad page's meta tags, not an LLM guess -
+// keeps the crawl fallback as fabrication-proof as the direct-hit path.
+async function fetchListingSnippet(url: string): Promise<{ title: string; content: string } | null> {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const title = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1];
+    const content = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/)?.[1] ?? "";
+    return title ? { title, content } : null;
+  } catch {
+    return null;
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -48,10 +90,18 @@ Deno.serve(async (req: Request) => {
   }
   const tavilyData = await tavilyRes.json();
   // ponytail: Tavily's include_domains isn't a hard filter in practice, so enforce it ourselves
-  const rawResults = (tavilyData.results ?? []).filter(
-    (r: { url: string }) =>
-      LISTING_SITES.some((site) => new URL(r.url).hostname.endsWith(site)) && isSingleListingUrl(r.url)
-  );
+  const onListingSite = (r: { url: string }) => LISTING_SITES.some((site) => new URL(r.url).hostname.endsWith(site));
+  let rawResults = (tavilyData.results ?? []).filter((r: { url: string }) => onListingSite(r) && isSingleListingUrl(r.url));
+
+  if (rawResults.length === 0) {
+    const hubUrls = (tavilyData.results ?? []).filter(onListingSite).slice(0, 3).map((r: { url: string }) => r.url);
+    const crawledUrls = [...new Set((await Promise.all(hubUrls.map(crawlForListingUrls))).flat())].slice(0, 8);
+    const snippets = await Promise.all(crawledUrls.map(fetchListingSnippet));
+    rawResults = crawledUrls
+      .map((url, i) => (snippets[i] ? { title: snippets[i]!.title, url, content: snippets[i]!.content } : null))
+      .filter((r: unknown): r is { title: string; url: string; content: string } => !!r);
+  }
+
   if (rawResults.length === 0) {
     return Response.json({ listings: [] }, { headers: corsHeaders });
   }
@@ -72,7 +122,7 @@ Deno.serve(async (req: Request) => {
                     url: r.url,
                     snippet: r.content,
                   }))
-                )}\n\nPull out every distinct real car mentioned that plausibly matches what the user wants (skip generic articles/guides with no specific car for sale). One entry per car, even if several share the same source URL - that's fine, the URL is just where to click through and find it. Extract what's visible: title, price (EUR, or null if not shown), year, mileage_km (digits only, no "km" suffix), location, source site. Return JSON only.`,
+                )}\n\nPull out every distinct real car mentioned that plausibly matches what the user wants (skip generic articles/guides with no specific car for sale). One entry per car, even if several share the same source URL - that's fine, the URL is just where to click through and find it. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year, mileage_km (a km distance as digits only, no "km" suffix and never a price - or null if not shown), location, source site. Return JSON only.`,
               },
             ],
           },
