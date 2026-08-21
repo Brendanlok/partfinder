@@ -35,6 +35,17 @@ const DIFFICULTY_LABEL: Record<Issue["difficulty"], string> = {
   garage: "Garage job",
 };
 
+type Tutorial = {
+  steps: string[];
+  video: { title: string; url: string; thumbnail: string } | null;
+};
+
+type TutorialState = {
+  loading?: boolean;
+  error?: string;
+  data?: Tutorial;
+};
+
 type VerdictState = {
   loading?: boolean;
   error?: string;
@@ -53,6 +64,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [listings, setListings] = useState<Listing[] | null>(null);
   const [verdicts, setVerdicts] = useState<Record<string, VerdictState>>({});
+  const [tutorials, setTutorials] = useState<Record<string, TutorialState>>({});
   const [statusIndex, setStatusIndex] = useState(0);
 
   useEffect(() => {
@@ -83,6 +95,28 @@ export default function Home() {
       setVerdicts((v) => ({
         ...v,
         [listing.url]: { error: e instanceof Error ? e.message : "Couldn't check this listing." },
+      }));
+    }
+  }
+
+  async function fetchTutorial(issue: string) {
+    setTutorials((t) => ({ ...t, [issue]: { loading: true } }));
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_TUTORIAL_FUNCTION_URL as string, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ issue, want }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't load repair steps.");
+      setTutorials((t) => ({ ...t, [issue]: { data } }));
+    } catch (e) {
+      setTutorials((t) => ({
+        ...t,
+        [issue]: { error: e instanceof Error ? e.message : "Couldn't load repair steps." },
       }));
     }
   }
@@ -217,6 +251,57 @@ export default function Home() {
                             <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
                               {DIFFICULTY_LABEL[item.difficulty]}
                             </span>
+                            {item.difficulty === "diy" && (
+                              <>
+                                {!tutorials[item.issue] && (
+                                  <button
+                                    onClick={() => fetchTutorial(item.issue)}
+                                    className="ml-2 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                                  >
+                                    How to fix
+                                  </button>
+                                )}
+                                {tutorials[item.issue]?.loading && (
+                                  <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
+                                    Writing up steps…
+                                  </span>
+                                )}
+                                {tutorials[item.issue]?.error && (
+                                  <span className="ml-2 text-xs text-red-600 dark:text-red-400">
+                                    {tutorials[item.issue]?.error}
+                                  </span>
+                                )}
+                                {tutorials[item.issue]?.data && (
+                                  <div className="mt-2 rounded-lg bg-white p-2 text-xs dark:bg-zinc-900">
+                                    <ol className="list-inside list-decimal text-zinc-600 dark:text-zinc-400">
+                                      {tutorials[item.issue]!.data!.steps.map((step, si) => (
+                                        <li key={si} className="mt-1">
+                                          {step}
+                                        </li>
+                                      ))}
+                                    </ol>
+                                    {tutorials[item.issue]!.data!.video && (
+                                      <a
+                                        href={tutorials[item.issue]!.data!.video!.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-2 flex items-center gap-2 text-black hover:underline dark:text-zinc-50"
+                                      >
+                                        {tutorials[item.issue]!.data!.video!.thumbnail && (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img
+                                            src={tutorials[item.issue]!.data!.video!.thumbnail}
+                                            alt=""
+                                            className="h-10 w-16 rounded object-cover"
+                                          />
+                                        )}
+                                        <span>▶ {tutorials[item.issue]!.data!.video!.title}</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </li>
                         ))}
                       </ul>
