@@ -18,6 +18,27 @@ type Listing = {
   source: string;
 };
 
+function parsePrice(price?: string): number | null {
+  if (!price) return null;
+  const digits = price.replace(/[^\d]/g, "");
+  return digits ? Number(digits) : null;
+}
+
+function medianPrice(listings: Listing[]): number | null {
+  const prices = listings.map((l) => parsePrice(l.price)).filter((p): p is number => p !== null).sort((a, b) => a - b);
+  if (prices.length < 3) return null; // too few results for a comparison to mean anything
+  const mid = Math.floor(prices.length / 2);
+  return prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+}
+
+// ponytail: inspired by CarGurus' deal-rating badge, but scoped honestly to what we
+// actually have - just this search's own results, not a market-wide price database.
+function priceBadge(price: number, median: number): string | null {
+  if (price <= median * 0.9) return "Below others found";
+  if (price >= median * 1.1) return "Above others found";
+  return null; // near-median isn't worth calling out
+}
+
 type Issue = {
   issue: string;
   difficulty: "diy" | "garage";
@@ -191,7 +212,11 @@ export default function Home() {
 
         {listings && listings.length > 0 && (
           <ul className="mt-6 flex flex-col gap-3">
-            {listings.map((l) => (
+            {listings.map((l) => {
+              const median = medianPrice(listings);
+              const price = parsePrice(l.price);
+              const badge = median && price ? priceBadge(price, median) : null;
+              return (
               <li
                 key={l.url}
                 className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
@@ -204,8 +229,16 @@ export default function Home() {
                 >
                   {l.title}
                 </a>
-                <div className="mt-1 flex flex-wrap gap-x-3 text-sm text-zinc-600 dark:text-zinc-400">
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                   {l.price && <span>{l.price}</span>}
+                  {badge && (
+                    <span
+                      className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                      title="Compared to other results in this search, not full market data"
+                    >
+                      {badge}
+                    </span>
+                  )}
                   {l.year && <span>{l.year}</span>}
                   {l.mileage_km && <span>{l.mileage_km} km</span>}
                   {l.location && <span>{l.location}</span>}
@@ -314,7 +347,8 @@ export default function Home() {
                   </div>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </main>
