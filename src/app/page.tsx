@@ -1,6 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const SEARCH_STATUS_MESSAGES = [
+  "Searching mobile.de, AutoScout24 & Kleinanzeigen…",
+  "Reading listings…",
+  "Almost there…",
+];
 
 type Listing = {
   title: string;
@@ -37,6 +43,17 @@ export default function Home() {
   const [error, setError] = useState("");
   const [listings, setListings] = useState<Listing[] | null>(null);
   const [verdicts, setVerdicts] = useState<Record<string, VerdictState>>({});
+  const [statusIndex, setStatusIndex] = useState(0);
+
+  useEffect(() => {
+    if (!loading) return;
+    setStatusIndex(0);
+    const id = setInterval(
+      () => setStatusIndex((i) => Math.min(i + 1, SEARCH_STATUS_MESSAGES.length - 1)),
+      8000
+    );
+    return () => clearInterval(id);
+  }, [loading]);
 
   async function checkCondition(listing: Listing) {
     setVerdicts((v) => ({ ...v, [listing.url]: { loading: true } }));
@@ -111,6 +128,12 @@ export default function Home() {
             {loading ? "Searching…" : "Search"}
           </button>
         </div>
+
+        {loading && (
+          <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+            {SEARCH_STATUS_MESSAGES[statusIndex]}
+          </p>
+        )}
 
         {error && (
           <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
