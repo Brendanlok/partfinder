@@ -2,6 +2,17 @@
 // secret - only the anon/publishable key (safe to expose) reaches the static frontend.
 const LISTING_SITES = ["mobile.de", "autoscout24.de", "kleinanzeigen.de"];
 
+// Per-site shape of a single-ad permalink vs. a category/search-results page - Gemini
+// sometimes invents specific title/price/mileage from a category page's snippet and
+// passes it off as one listing, so reject those by URL shape before they reach it.
+function isSingleListingUrl(url: string): boolean {
+  const u = new URL(url);
+  if (u.hostname.endsWith("kleinanzeigen.de")) return u.pathname.includes("/s-anzeige/");
+  if (u.hostname.endsWith("autoscout24.de")) return u.pathname.startsWith("/angebote/");
+  if (u.hostname.endsWith("mobile.de")) return u.pathname.endsWith("/details.html") && u.searchParams.has("id");
+  return false;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -37,8 +48,9 @@ Deno.serve(async (req: Request) => {
   }
   const tavilyData = await tavilyRes.json();
   // ponytail: Tavily's include_domains isn't a hard filter in practice, so enforce it ourselves
-  const rawResults = (tavilyData.results ?? []).filter((r: { url: string }) =>
-    LISTING_SITES.some((site) => new URL(r.url).hostname.endsWith(site))
+  const rawResults = (tavilyData.results ?? []).filter(
+    (r: { url: string }) =>
+      LISTING_SITES.some((site) => new URL(r.url).hostname.endsWith(site)) && isSingleListingUrl(r.url)
   );
   if (rawResults.length === 0) {
     return Response.json({ listings: [] }, { headers: corsHeaders });
@@ -54,7 +66,7 @@ Deno.serve(async (req: Request) => {
           {
             parts: [
               {
-                text: `A user wants this car in Germany: "${want}"\n\nHere are raw search results from German car marketplaces (mobile.de, autoscout24.de, kleinanzeigen.de). Some pages list one car, others are search-result pages listing several:\n${JSON.stringify(
+                text: `A user wants this car in Germany: "${want}"\n\nHere are raw search results from German car marketplaces (mobile.de, autoscout24.de, kleinanzeigen.de), already filtered to single-listing pages:\n${JSON.stringify(
                   rawResults.map((r: { title: string; url: string; content: string }) => ({
                     title: r.title,
                     url: r.url,
