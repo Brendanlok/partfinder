@@ -24,8 +24,12 @@ Deno.serve(async (req: Request) => {
       api_key: Deno.env.get("TAVILY_API_KEY"),
       query: `${want} gebraucht kaufen Germany used car listing`,
       include_domains: LISTING_SITES,
-      search_depth: "advanced",
-      max_results: 15,
+      // ponytail: "basic" depth is ~1 Tavily credit and single-pass vs "advanced"'s
+      // multi-pass rerank (~2 credits, most of the old 30-50s). Queries here are
+      // already narrow (include_domains + a specific car ask), so basic's recall
+      // is plenty - bump back to advanced if match quality regresses.
+      search_depth: "basic",
+      max_results: 10,
     }),
   });
   if (!tavilyRes.ok) {

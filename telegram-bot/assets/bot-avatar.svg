@@ -1,0 +1,15 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#18181b"/>
+  <!-- car silhouette -->
+  <g transform="translate(96,190)">
+    <path d="M20 90 L40 30 Q50 10 75 10 L245 10 Q270 10 280 30 L300 90 Z"
+          fill="none" stroke="#f4f4f5" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M10 90 L310 90 L310 120 Q310 132 298 132 L22 132 Q10 132 10 120 Z"
+          fill="none" stroke="#f4f4f5" stroke-width="14" stroke-linejoin="round"/>
+    <circle cx="75" cy="132" r="24" fill="#18181b" stroke="#f4f4f5" stroke-width="14"/>
+    <circle cx="245" cy="132" r="24" fill="#18181b" stroke="#f4f4f5" stroke-width="14"/>
+  </g>
+  <!-- magnifying glass -->
+  <circle cx="330" cy="150" r="70" fill="#18181b" stroke="#fbbf24" stroke-width="20"/>
+  <line x1="378" y1="198" x2="430" y2="250" stroke="#fbbf24" stroke-width="24" stroke-linecap="round"/>
+</svg>
