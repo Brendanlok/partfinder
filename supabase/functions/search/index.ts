@@ -162,5 +162,16 @@ Deno.serve(async (req: Request) => {
   const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
   const parsed = JSON.parse(text);
 
-  return Response.json({ listings: parsed.listings ?? [] }, { headers: corsHeaders });
+  // ponytail: Gemini occasionally echoes a schema field's own name back as its value
+  // (e.g. year: "year") instead of omitting it - strip those before they hit the UI.
+  const OPTIONAL_FIELDS = ["price", "year", "mileage_km", "location"];
+  const listings = (parsed.listings ?? []).map((l: Record<string, unknown>) => {
+    const clean = { ...l };
+    for (const key of OPTIONAL_FIELDS) {
+      if (typeof clean[key] === "string" && (clean[key] as string).trim().toLowerCase() === key) delete clean[key];
+    }
+    return clean;
+  });
+
+  return Response.json({ listings }, { headers: corsHeaders });
 });
