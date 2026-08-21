@@ -29,6 +29,7 @@ jobs:
       # Not secret by design - this is the public "anon" key the Edge Function's CORS
       # gateway expects; the actual API keys stay server-side as Supabase function secrets.
       NEXT_PUBLIC_SEARCH_FUNCTION_URL: https://ekcnpuwclkjnqnntlvot.supabase.co/functions/v1/search
+      NEXT_PUBLIC_VERDICT_FUNCTION_URL: https://ekcnpuwclkjnqnntlvot.supabase.co/functions/v1/verdict
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_pfng2gwF0IdAZfwbwhWPWQ_bfHOMIAC
     steps:
       - uses: actions/checkout@v4

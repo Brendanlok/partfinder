@@ -9,3 +9,9 @@ entrypoint = "./functions/search/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/search/*.html" ]
+
+[functions.verdict]
+enabled = true
+verify_jwt = false
+import_map = "./functions/verdict/deno.json"
+entrypoint = "./functions/verdict/index.ts"
