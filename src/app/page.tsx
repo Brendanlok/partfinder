@@ -162,12 +162,12 @@ export default function Home() {
             onChange={(e) => setWant(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && search()}
             placeholder="e.g. BMW E46 M3, manual, under 20k, good condition"
-            className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            className="w-full flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
           <button
             onClick={search}
             disabled={loading || !want.trim()}
-            className="rounded-lg bg-black px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+            className="w-full rounded-lg bg-black px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black sm:w-auto"
           >
             {loading ? "Searching…" : "Search"}
           </button>
