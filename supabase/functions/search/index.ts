@@ -163,12 +163,15 @@ Deno.serve(async (req: Request) => {
   const parsed = JSON.parse(text);
 
   // ponytail: Gemini occasionally echoes a schema field's own name back as its value
-  // (e.g. year: "year") instead of omitting it - strip those before they hit the UI.
+  // (e.g. year: "year"), or defaults price/mileage to "0" when it's actually unknown -
+  // neither is a real value, so strip both before they hit the UI.
   const OPTIONAL_FIELDS = ["price", "year", "mileage_km", "location"];
   const listings = (parsed.listings ?? []).map((l: Record<string, unknown>) => {
     const clean = { ...l };
     for (const key of OPTIONAL_FIELDS) {
-      if (typeof clean[key] === "string" && (clean[key] as string).trim().toLowerCase() === key) delete clean[key];
+      const v = typeof clean[key] === "string" ? (clean[key] as string).trim().toLowerCase() : null;
+      const isZero = (key === "price" || key === "mileage_km") && v === "0";
+      if (v !== null && (v === key || isZero)) delete clean[key];
     }
     return clean;
   });
