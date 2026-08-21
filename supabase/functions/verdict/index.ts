@@ -110,7 +110,7 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: "Couldn't load this listing's photos." }, { status: 502, headers: corsHeaders });
   }
 
-  const prompt = `A buyer wants this car: "${want || "a used car"}"\n\nListing description: "${description}"\n\nLook closely at the attached photos of this specific vehicle for anything visible that matters to a buyer - rust, dents, panel gaps/mismatched paint, worn or damaged interior, tyre wear, dashboard warning lights, missing parts, modification signs. Give a short, honest, ballpark read. Note this is a visual check only from listing photos, not a substitute for an in-person inspection or vehicle history check.\n\nReturn JSON only.`;
+  const prompt = `A buyer wants this car: "${want || "a used car"}"\n\nListing description: "${description}"\n\nLook closely at the attached photos of this specific vehicle for anything visible that matters to a buyer - rust, dents, panel gaps/mismatched paint, worn or damaged interior, tyre wear, dashboard warning lights, missing parts, modification signs. Give a short, honest, ballpark read. For each issue found, rate whether fixing it is realistically a "diy" job (basic tools, a weekend, common skill level) or needs a "garage" (special tools, lift, expertise, or safety-critical - brakes, suspension, structural rust). Note this is a visual check only from listing photos, not a substitute for an in-person inspection or vehicle history check.\n\nReturn JSON only.`;
 
   const geminiRes = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
@@ -124,7 +124,17 @@ Deno.serve(async (req: Request) => {
           responseSchema: {
             type: "object",
             properties: {
-              issues: { type: "array", items: { type: "string" } },
+              issues: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    issue: { type: "string" },
+                    difficulty: { type: "string", enum: ["diy", "garage"] },
+                  },
+                  required: ["issue", "difficulty"],
+                },
+              },
               condition_summary: { type: "string" },
               verdict: { type: "string", enum: ["buy", "maybe", "skip"] },
             },

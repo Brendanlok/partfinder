@@ -18,11 +18,21 @@ type Listing = {
   source: string;
 };
 
+type Issue = {
+  issue: string;
+  difficulty: "diy" | "garage";
+};
+
 type Verdict = {
-  issues: string[];
+  issues: Issue[];
   condition_summary: string;
   verdict: "buy" | "maybe" | "skip";
   photos_checked: number;
+};
+
+const DIFFICULTY_LABEL: Record<Issue["difficulty"], string> = {
+  diy: "DIY",
+  garage: "Garage job",
 };
 
 type VerdictState = {
@@ -201,8 +211,13 @@ export default function Home() {
                     </p>
                     {verdicts[l.url]!.data!.issues.length > 0 && (
                       <ul className="mt-2 list-inside list-disc text-zinc-600 dark:text-zinc-400">
-                        {verdicts[l.url]!.data!.issues.map((issue, i) => (
-                          <li key={i}>{issue}</li>
+                        {verdicts[l.url]!.data!.issues.map((item, i) => (
+                          <li key={i}>
+                            {item.issue}{" "}
+                            <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                              {DIFFICULTY_LABEL[item.difficulty]}
+                            </span>
+                          </li>
                         ))}
                       </ul>
                     )}
