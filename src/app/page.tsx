@@ -79,6 +79,8 @@ const VERDICT_LABEL: Record<Verdict["verdict"], string> = {
   skip: "Proceed with caution",
 };
 
+const LAST_SEARCH_KEY = "partfinder:lastSearch";
+
 export default function Home() {
   const [want, setWant] = useState("");
   const [loading, setLoading] = useState(false);
@@ -87,6 +89,20 @@ export default function Home() {
   const [verdicts, setVerdicts] = useState<Record<string, VerdictState>>({});
   const [tutorials, setTutorials] = useState<Record<string, TutorialState>>({});
   const [statusIndex, setStatusIndex] = useState(0);
+
+  // Restore the last successful search on load, so a refresh/back-nav doesn't
+  // lose results (and force a re-search that burns another API call).
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LAST_SEARCH_KEY);
+      if (!saved) return;
+      const { want: savedWant, listings: savedListings } = JSON.parse(saved);
+      if (savedWant) setWant(savedWant);
+      if (Array.isArray(savedListings)) setListings(savedListings);
+    } catch {
+      // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
+    }
+  }, []);
 
   useEffect(() => {
     if (!loading) return;
@@ -159,6 +175,11 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong.");
       setListings(data.listings);
+      try {
+        localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify({ want, listings: data.listings }));
+      } catch {
+        // ponytail: storage full/unavailable, non-critical
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
