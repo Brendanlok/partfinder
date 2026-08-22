@@ -97,24 +97,31 @@ Deno.serve(async (req: Request) => {
   const tavilyData = await tavilyRes.json();
   // ponytail: Tavily's include_domains isn't a hard filter in practice, so enforce it ourselves
   const onListingSite = (r: { url: string }) => LISTING_SITES.some((site) => new URL(r.url).hostname.endsWith(site));
-  let rawResults = (tavilyData.results ?? []).filter((r: { url: string }) => onListingSite(r) && isSingleListingUrl(r.url));
+  const directResults = (tavilyData.results ?? []).filter(
+    (r: { url: string }) => onListingSite(r) && isSingleListingUrl(r.url)
+  );
+
+  // ponytail: always run the crawl fallback too, not only when direct hits are zero (root
+  // cause of the P1 empty-results bug, confirmed via debug endpoints this session: Tavily's
+  // direct single-listing hits can be stale/sold-out with thin content, so Gemini correctly
+  // judges them as no real match and returns zero - even though the crawl fallback would have
+  // found fresh listings from the same hub pages). Merging both (deduped by URL) costs no
+  // extra Tavily/Gemini calls, just a few extra plain fetches to the listing sites.
+  const hubUrls = (tavilyData.results ?? []).filter(onListingSite).slice(0, 3).map((r: { url: string }) => r.url);
+  const crawledUrls = [...new Set((await Promise.all(hubUrls.map(crawlForListingUrls))).flat())].slice(0, 8);
+  const snippets = await Promise.all(crawledUrls.map(fetchListingSnippet));
+  const crawledResults = crawledUrls
+    .map((url, i) => (snippets[i] ? { title: snippets[i]!.title, url, content: snippets[i]!.content } : null))
+    .filter((r: unknown): r is { title: string; url: string; content: string } => !!r);
+
+  const seenUrls = new Set<string>();
+  const rawResults = [...directResults, ...crawledResults].filter((r: { url: string }) => {
+    if (seenUrls.has(r.url)) return false;
+    seenUrls.add(r.url);
+    return true;
+  });
 
   if (rawResults.length === 0) {
-    const hubUrls = (tavilyData.results ?? []).filter(onListingSite).slice(0, 3).map((r: { url: string }) => r.url);
-    // ponytail: bare instrumentation to pin down the empty-results P1 bug (see Notion To-Do) -
-    // remove once root cause is confirmed from these logs in a live-user invocation.
-    console.log("[search] tavily hits:", (tavilyData.results ?? []).length, "hub urls tried:", hubUrls);
-    const crawledUrls = [...new Set((await Promise.all(hubUrls.map(crawlForListingUrls))).flat())].slice(0, 8);
-    console.log("[search] crawled listing urls:", crawledUrls.length, crawledUrls);
-    const snippets = await Promise.all(crawledUrls.map(fetchListingSnippet));
-    rawResults = crawledUrls
-      .map((url, i) => (snippets[i] ? { title: snippets[i]!.title, url, content: snippets[i]!.content } : null))
-      .filter((r: unknown): r is { title: string; url: string; content: string } => !!r);
-    console.log("[search] snippets fetched ok:", rawResults.length, "of", crawledUrls.length);
-  }
-
-  if (rawResults.length === 0) {
-    console.log("[search] returning empty - no raw results after direct filter + crawl fallback");
     return Response.json({ listings: [] }, { headers: corsHeaders });
   }
 
