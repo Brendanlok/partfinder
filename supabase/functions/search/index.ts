@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
                     url: r.url,
                     snippet: r.content,
                   }))
-                )}\n\nPull out every distinct real car mentioned that plausibly matches what the user wants (skip generic articles/guides with no specific car for sale). One entry per car, even if several share the same source URL - that's fine, the URL is just where to click through and find it. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year, mileage_km (a km distance as digits only, no "km" suffix and never a price - or null if not shown), location, source site. Return JSON only.`,
+                )}\n\nPull out every distinct real car mentioned that plausibly matches what the user wants (skip generic articles/guides with no specific car for sale). One entry per car, even if several share the same source URL - that's fine, the URL is just where to click through and find it. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year, mileage_km (a km distance as digits only, no "km" suffix and never a price - or null if not shown), location, source site. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Return JSON only.`,
               },
             ],
           },
@@ -144,8 +144,10 @@ Deno.serve(async (req: Request) => {
                     mileage_km: { type: "string" },
                     location: { type: "string" },
                     source: { type: "string" },
+                    match_score: { type: "number" },
+                    match_tags: { type: "array", items: { type: "string" } },
                   },
-                  required: ["title", "url", "source"],
+                  required: ["title", "url", "source", "match_score"],
                 },
               },
             },
@@ -179,6 +181,10 @@ Deno.serve(async (req: Request) => {
       const v = typeof clean[key] === "string" ? (clean[key] as string).trim().toLowerCase() : null;
       const isZero = (key === "price" || key === "mileage_km") && v === "0";
       if (v !== null && (v === key || isZero)) delete clean[key];
+    }
+    // clamp in case Gemini strays outside the 0-100 range it was asked for
+    if (typeof clean.match_score === "number") {
+      clean.match_score = Math.max(0, Math.min(100, Math.round(clean.match_score)));
     }
     return clean;
   });

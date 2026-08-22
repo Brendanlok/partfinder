@@ -16,7 +16,46 @@ type Listing = {
   mileage_km?: string;
   location?: string;
   source: string;
+  match_score?: number;
+  match_tags?: string[];
 };
+
+function matchColor(score: number): string {
+  if (score >= 80) return "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300";
+  if (score >= 50) return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
+  return "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300";
+}
+
+type SortOption = "relevance" | "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
+
+const SORT_LABEL: Record<SortOption, string> = {
+  relevance: "Best match",
+  price_asc: "Price: low to high",
+  price_desc: "Price: high to low",
+  year_desc: "Newest year",
+  mileage_asc: "Lowest mileage",
+};
+
+function sortListings(listings: Listing[], sortBy: SortOption): Listing[] {
+  const sorted = [...listings];
+  switch (sortBy) {
+    case "price_asc":
+      sorted.sort((a, b) => (parsePrice(a.price) ?? Infinity) - (parsePrice(b.price) ?? Infinity));
+      break;
+    case "price_desc":
+      sorted.sort((a, b) => (parsePrice(b.price) ?? -Infinity) - (parsePrice(a.price) ?? -Infinity));
+      break;
+    case "year_desc":
+      sorted.sort((a, b) => (Number(b.year) || 0) - (Number(a.year) || 0));
+      break;
+    case "mileage_asc":
+      sorted.sort((a, b) => (Number(a.mileage_km) || Infinity) - (Number(b.mileage_km) || Infinity));
+      break;
+    default:
+      sorted.sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1));
+  }
+  return sorted;
+}
 
 function parsePrice(price?: string): number | null {
   if (!price) return null;
@@ -89,6 +128,10 @@ export default function Home() {
   const [verdicts, setVerdicts] = useState<Record<string, VerdictState>>({});
   const [tutorials, setTutorials] = useState<Record<string, TutorialState>>({});
   const [statusIndex, setStatusIndex] = useState(0);
+  const [sortBy, setSortBy] = useState<SortOption>("relevance");
+  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
+  const [maxPrice, setMaxPrice] = useState("");
+  const [speakingUrl, setSpeakingUrl] = useState<string | null>(null);
 
   // Restore the last successful search on load, so a refresh/back-nav doesn't
   // lose results (and force a re-search that burns another API call).
@@ -113,6 +156,38 @@ export default function Home() {
     );
     return () => clearInterval(id);
   }, [loading]);
+
+  // Stop any in-progress speech if the component unmounts mid-read.
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  function toggleSpeak(listing: Listing) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    if (speakingUrl === listing.url) {
+      setSpeakingUrl(null);
+      return;
+    }
+    const parts = [listing.title];
+    if (listing.price) parts.push(listing.price);
+    if (listing.year) parts.push(listing.year);
+    if (listing.mileage_km) parts.push(`${listing.mileage_km} kilometers`);
+    if (listing.location) parts.push(listing.location);
+    if (listing.match_tags?.length) parts.push(listing.match_tags.join(", "));
+    const verdict = verdicts[listing.url]?.data;
+    if (verdict) {
+      parts.push(VERDICT_LABEL[verdict.verdict]);
+      parts.push(verdict.condition_summary);
+    }
+    const utter = new SpeechSynthesisUtterance(parts.join(". "));
+    utter.onend = () => setSpeakingUrl(null);
+    utter.onerror = () => setSpeakingUrl(null);
+    window.speechSynthesis.speak(utter);
+    setSpeakingUrl(listing.url);
+  }
 
   async function checkCondition(listing: Listing) {
     setVerdicts((v) => ({ ...v, [listing.url]: { loading: true } }));
@@ -163,6 +238,9 @@ export default function Home() {
     setLoading(true);
     setError("");
     setListings(null);
+    setSortBy("relevance");
+    setSourceFilter(new Set());
+    setMaxPrice("");
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_SEARCH_FUNCTION_URL as string, {
         method: "POST",
@@ -187,7 +265,31 @@ export default function Home() {
     }
   }
 
-  const median = listings ? medianPrice(listings) : null;
+  const availableSources = listings ? [...new Set(listings.map((l) => l.source))] : [];
+  const filteredListings = listings
+    ? listings.filter((l) => {
+        if (sourceFilter.size > 0 && !sourceFilter.has(l.source)) return false;
+        if (maxPrice) {
+          const p = parsePrice(l.price);
+          if (p !== null && p > Number(maxPrice)) return false;
+        }
+        return true;
+      })
+    : [];
+  const sortedListings = sortListings(filteredListings, sortBy);
+  const median = medianPrice(filteredListings);
+
+  // Empty sourceFilter means "no filter, show all" (also how checkboxes render as checked).
+  // Toggling one off first expands that implicit "all" into an explicit set so only this
+  // source gets excluded; toggling everything back on collapses to empty again.
+  function toggleSource(source: string) {
+    setSourceFilter((prev) => {
+      const next = prev.size === 0 ? new Set(availableSources) : new Set(prev);
+      if (next.has(source)) next.delete(source);
+      else next.add(source);
+      return next.size === availableSources.length ? new Set() : next;
+    });
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black px-4 py-10 sm:py-16">
@@ -234,8 +336,48 @@ export default function Home() {
         )}
 
         {listings && listings.length > 0 && (
-          <ul className="mt-6 flex flex-col gap-3">
-            {listings.map((l) => {
+          <>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              >
+                {(Object.keys(SORT_LABEL) as SortOption[]).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {SORT_LABEL[opt]}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                placeholder="Max price €"
+                className="w-32 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+              {availableSources.map((s) => (
+                <label key={s} className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+                  <input
+                    type="checkbox"
+                    checked={sourceFilter.size === 0 || sourceFilter.has(s)}
+                    onChange={() => toggleSource(s)}
+                    className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                  />
+                  {s}
+                </label>
+              ))}
+            </div>
+
+            {sortedListings.length === 0 && (
+              <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+                No results match these filters.
+              </p>
+            )}
+
+          <ul className="mt-4 flex flex-col gap-3">
+            {sortedListings.map((l) => {
               const price = parsePrice(l.price);
               const badge = median && price ? priceBadge(price, median) : null;
               return (
@@ -243,14 +385,38 @@ export default function Home() {
                 key={l.url}
                 className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
               >
-                <a
-                  href={l.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-black hover:underline dark:text-zinc-50"
-                >
-                  {l.title}
-                </a>
+                <div className="flex items-start justify-between gap-2">
+                  <a
+                    href={l.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-black hover:underline dark:text-zinc-50"
+                  >
+                    {l.title}
+                  </a>
+                  <button
+                    onClick={() => toggleSpeak(l)}
+                    aria-label={speakingUrl === l.url ? "Stop reading" : "Read listing aloud"}
+                    className="shrink-0 text-zinc-400 hover:text-black dark:text-zinc-500 dark:hover:text-zinc-50"
+                  >
+                    {speakingUrl === l.url ? "⏹" : "🔊"}
+                  </button>
+                </div>
+                {typeof l.match_score === "number" && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${matchColor(l.match_score)}`}>
+                      {l.match_score}% match
+                    </span>
+                    {l.match_tags?.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                   {l.price && <span>{l.price}</span>}
                   {badge && (
@@ -372,6 +538,7 @@ export default function Home() {
               );
             })}
           </ul>
+          </>
         )}
       </main>
     </div>
