@@ -101,14 +101,20 @@ Deno.serve(async (req: Request) => {
 
   if (rawResults.length === 0) {
     const hubUrls = (tavilyData.results ?? []).filter(onListingSite).slice(0, 3).map((r: { url: string }) => r.url);
+    // ponytail: bare instrumentation to pin down the empty-results P1 bug (see Notion To-Do) -
+    // remove once root cause is confirmed from these logs in a live-user invocation.
+    console.log("[search] tavily hits:", (tavilyData.results ?? []).length, "hub urls tried:", hubUrls);
     const crawledUrls = [...new Set((await Promise.all(hubUrls.map(crawlForListingUrls))).flat())].slice(0, 8);
+    console.log("[search] crawled listing urls:", crawledUrls.length, crawledUrls);
     const snippets = await Promise.all(crawledUrls.map(fetchListingSnippet));
     rawResults = crawledUrls
       .map((url, i) => (snippets[i] ? { title: snippets[i]!.title, url, content: snippets[i]!.content } : null))
       .filter((r: unknown): r is { title: string; url: string; content: string } => !!r);
+    console.log("[search] snippets fetched ok:", rawResults.length, "of", crawledUrls.length);
   }
 
   if (rawResults.length === 0) {
+    console.log("[search] returning empty - no raw results after direct filter + crawl fallback");
     return Response.json({ listings: [] }, { headers: corsHeaders });
   }
 
