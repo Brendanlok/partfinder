@@ -41,7 +41,14 @@ Deno.serve(async (req: Request) => {
   }
   const geminiData = await geminiRes.json();
   const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  const steps: string[] = JSON.parse(text).steps ?? [];
+  let steps: string[];
+  try {
+    steps = JSON.parse(text).steps ?? [];
+  } catch {
+    // ponytail: Gemini occasionally returns malformed/truncated JSON despite schema mode -
+    // fail with the same friendly-error shape as every other path here, not an uncaught 500.
+    return Response.json({ error: "Couldn't write up repair steps, try again." }, { status: 502, headers: corsHeaders });
+  }
 
   // ponytail: best-effort - a video match failing shouldn't sink the whole response,
   // the written steps alone are still useful.

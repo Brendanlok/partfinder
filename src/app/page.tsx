@@ -187,6 +187,8 @@ export default function Home() {
     }
   }
 
+  const median = listings ? medianPrice(listings) : null;
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black px-4 py-10 sm:py-16">
       <main className="mx-auto max-w-xl">
@@ -234,7 +236,6 @@ export default function Home() {
         {listings && listings.length > 0 && (
           <ul className="mt-6 flex flex-col gap-3">
             {listings.map((l) => {
-              const median = medianPrice(listings);
               const price = parsePrice(l.price);
               const badge = median && price ? priceBadge(price, median) : null;
               return (

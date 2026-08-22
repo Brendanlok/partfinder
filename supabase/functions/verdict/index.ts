@@ -149,7 +149,14 @@ Deno.serve(async (req: Request) => {
   }
   const geminiData = await geminiRes.json();
   const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  const parsed = JSON.parse(text);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // ponytail: Gemini occasionally returns malformed/truncated JSON despite schema mode -
+    // fail with the same friendly-error shape as every other path here, not an uncaught 500.
+    return Response.json({ error: "Couldn't read the photos, try again." }, { status: 502, headers: corsHeaders });
+  }
 
   return Response.json({ ...parsed, photos_checked: imageParts.length }, { headers: corsHeaders });
 });

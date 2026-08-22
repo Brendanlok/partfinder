@@ -160,7 +160,14 @@ Deno.serve(async (req: Request) => {
   }
   const geminiData = await geminiRes.json();
   const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  const parsed = JSON.parse(text);
+  let parsed: { listings?: unknown };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // ponytail: Gemini occasionally returns malformed/truncated JSON despite schema mode -
+    // fail with the same friendly-error shape as every other path here, not an uncaught 500.
+    return Response.json({ error: "Couldn't read the results, try again." }, { status: 502, headers: corsHeaders });
+  }
 
   // ponytail: Gemini occasionally echoes a schema field's own name back as its value
   // (e.g. year: "year"), or defaults price/mileage to "0" when it's actually unknown -
