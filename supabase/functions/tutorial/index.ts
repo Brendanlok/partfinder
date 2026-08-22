@@ -11,7 +11,13 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const { issue, want } = await req.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid request." }, { status: 400, headers: corsHeaders });
+  }
+  const { issue, want } = body;
   if (!issue || typeof issue !== "string") {
     return Response.json({ error: "Missing issue description." }, { status: 400, headers: corsHeaders });
   }

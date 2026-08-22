@@ -69,7 +69,13 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const { url, want } = await req.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid request." }, { status: 400, headers: corsHeaders });
+  }
+  const { url, want } = body;
   if (!url || typeof url !== "string") {
     return Response.json({ error: "Missing listing URL." }, { status: 400, headers: corsHeaders });
   }
