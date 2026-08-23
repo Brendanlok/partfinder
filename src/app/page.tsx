@@ -268,7 +268,7 @@ export default function Home() {
   const availableSources = listings ? [...new Set(listings.map((l) => l.source))] : [];
   const filteredListings = listings
     ? listings.filter((l) => {
-        if (sourceFilter.size > 0 && !sourceFilter.has(l.source)) return false;
+        if (sourceFilter.has(l.source)) return false;
         if (maxPrice) {
           const p = parsePrice(l.price);
           if (p !== null && p > Number(maxPrice)) return false;
@@ -279,15 +279,15 @@ export default function Home() {
   const sortedListings = sortListings(filteredListings, sortBy);
   const median = medianPrice(filteredListings);
 
-  // Empty sourceFilter means "no filter, show all" (also how checkboxes render as checked).
-  // Toggling one off first expands that implicit "all" into an explicit set so only this
-  // source gets excluded; toggling everything back on collapses to empty again.
+  // sourceFilter holds EXCLUDED sources (unchecked boxes), not included ones - so "exclude
+  // nothing" (show all) and "exclude everything" (show none) are naturally distinct sets,
+  // no size-collapsing tricks needed.
   function toggleSource(source: string) {
     setSourceFilter((prev) => {
-      const next = prev.size === 0 ? new Set(availableSources) : new Set(prev);
+      const next = new Set(prev);
       if (next.has(source)) next.delete(source);
       else next.add(source);
-      return next.size === availableSources.length ? new Set() : next;
+      return next;
     });
   }
 
@@ -361,7 +361,7 @@ export default function Home() {
                 <label key={s} className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
                   <input
                     type="checkbox"
-                    checked={sourceFilter.size === 0 || sourceFilter.has(s)}
+                    checked={!sourceFilter.has(s)}
                     onChange={() => toggleSource(s)}
                     className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
                   />
