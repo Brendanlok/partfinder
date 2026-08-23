@@ -376,6 +376,12 @@ export default function Home() {
               </p>
             )}
 
+            {sortedListings.length > 0 && sortedListings.length < listings.length && (
+              <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                Showing {sortedListings.length} of {listings.length} listings
+              </p>
+            )}
+
           <ul className="mt-4 flex flex-col gap-3">
             {sortedListings.map((l) => {
               const price = parsePrice(l.price);
