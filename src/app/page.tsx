@@ -144,6 +144,12 @@ function partsTotal(parts: PartEstimate[]): number {
   return parts.reduce((sum, p) => sum + (parsePrice(p.price) ?? 0), 0);
 }
 
+// "Build your car": only parts the user actually checked count toward the total - an
+// auto-suggested part they haven't opted into shouldn't inflate what they'd pay.
+function buildTotal(carPrice: number | null, checkedItems: PartEstimate[]): number {
+  return (carPrice ?? 0) + partsTotal(checkedItems);
+}
+
 type VerdictState = {
   loading?: boolean;
   error?: string;
@@ -176,6 +182,38 @@ export default function Home() {
   const [showPartsCost, setShowPartsCost] = useState(false);
   const [parts, setParts] = useState<Record<string, PartsState>>({});
   const [checkedParts, setCheckedParts] = useState<Set<string>>(new Set());
+  const [customParts, setCustomParts] = useState<Record<string, PartEstimate[]>>({});
+  const [newPartName, setNewPartName] = useState("");
+  const [newPartPrice, setNewPartPrice] = useState("");
+  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+
+  // Escape closes the detail modal, same as clicking the backdrop or the × button.
+  useEffect(() => {
+    if (!selectedUrl) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedUrl(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedUrl]);
+
+  function addCustomPart(listingUrl: string) {
+    if (!newPartName.trim()) return;
+    const part: PartEstimate = { issue: "custom", part_name: newPartName.trim() };
+    if (newPartPrice.trim()) part.price = newPartPrice.trim();
+    setCustomParts((prev) => ({ ...prev, [listingUrl]: [...(prev[listingUrl] ?? []), part] }));
+    // Added parts are what the user is actively building with, so include them by default.
+    setCheckedParts((prev) => new Set(prev).add(`${listingUrl}::${part.part_name}::custom`));
+    setNewPartName("");
+    setNewPartPrice("");
+  }
+
+  function removeCustomPart(listingUrl: string, index: number) {
+    setCustomParts((prev) => ({
+      ...prev,
+      [listingUrl]: (prev[listingUrl] ?? []).filter((_, i) => i !== index),
+    }));
+  }
 
   function toggleVerdictExpanded(url: string) {
     setExpandedVerdicts((prev) => {
@@ -354,6 +392,7 @@ export default function Home() {
     }
   }
 
+  const selectedListing = listings?.find((l) => l.url === selectedUrl) ?? null;
   const availableSources = listings ? [...new Set(listings.map((l) => l.source))] : [];
   const filteredListings = listings
     ? listings.filter((l) => {
@@ -382,7 +421,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black px-4 py-10 sm:py-16">
-      <main className="mx-auto max-w-3xl">
+      <main className="mx-auto max-w-6xl">
         <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
           Partfinder
         </h1>
@@ -471,7 +510,7 @@ export default function Home() {
               ))}
               <label
                 className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400"
-                title="Ad price only, or also look up which parts a checked issue needs and where to buy them"
+                title="Ad price only, or also look up parts to fix up the car and build a shopping list"
               >
                 <input
                   type="checkbox"
@@ -479,7 +518,7 @@ export default function Home() {
                   onChange={(e) => setShowPartsCost(e.target.checked)}
                   className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
                 />
-                + Parts needed
+                + Parts &amp; build cost
               </label>
             </div>
 
@@ -495,32 +534,105 @@ export default function Home() {
               </p>
             )}
 
-          <ul className="mt-4 flex flex-col gap-3">
+          <ul className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {sortedListings.map((l) => {
               const price = parsePrice(l.price);
               const badge = median && price ? priceBadge(price, median) : null;
               return (
-              <li
-                key={l.url}
-                className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 sm:flex sm:items-stretch"
-              >
-                {l.image && (
+              <li key={l.url}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUrl(l.url)}
+                  className="block w-full overflow-hidden rounded-lg border border-zinc-200 bg-white text-left dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  <div className="aspect-[4/3] w-full bg-zinc-100 dark:bg-zinc-800">
+                    {l.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={l.image} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-3xl text-zinc-300 dark:text-zinc-700">
+                        🚗
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <p className="truncate font-medium text-black dark:text-zinc-50">{l.title}</p>
+                    {typeof l.match_score === "number" && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${matchColor(l.match_score)}`}>
+                          {l.match_score}% match
+                        </span>
+                      </div>
+                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+                      {l.price && <span>{l.price}</span>}
+                      {badge && (
+                        <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                          {badge}
+                        </span>
+                      )}
+                      {l.year && <span>{l.year}</span>}
+                      {l.mileage_km && <span>{l.mileage_km} km</span>}
+                      <span className="text-zinc-400 dark:text-zinc-600">{l.source}</span>
+                    </div>
+                  </div>
+                </button>
+              </li>
+              );
+            })}
+          </ul>
+          </>
+        )}
+
+        {selectedListing && (() => {
+          const l = selectedListing;
+          const price = parsePrice(l.price);
+          const badge = median && price ? priceBadge(price, median) : null;
+          const diyIssues = (verdicts[l.url]?.data?.issues ?? [])
+            .filter((i) => i.difficulty === "diy")
+            .map((i) => i.issue);
+          const partsResult = parts[l.url];
+          const allParts = [...(partsResult?.data ?? []), ...(customParts[l.url] ?? [])];
+          const partKey = (p: PartEstimate, isCustom: boolean) =>
+            `${l.url}::${p.part_name}${isCustom ? "::custom" : ""}`;
+          const checkedItems = allParts.filter((p, i) =>
+            checkedParts.has(partKey(p, i >= (partsResult?.data?.length ?? 0)))
+          );
+          return (
+          <div
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 py-10 sm:items-center"
+            onClick={() => setSelectedUrl(null)}
+          >
+            <div
+              className="w-full max-w-2xl overflow-hidden rounded-lg bg-white dark:bg-zinc-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="relative aspect-[16/9] w-full bg-zinc-100 dark:bg-zinc-800">
+                {l.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={l.image}
-                    alt=""
-                    className="h-44 w-full object-cover sm:h-auto sm:w-56 sm:flex-shrink-0"
-                    loading="lazy"
-                  />
+                  <img src={l.image} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-5xl text-zinc-300 dark:text-zinc-700">
+                    🚗
+                  </div>
                 )}
-                <div className="min-w-0 flex-1 p-4">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUrl(null)}
+                  aria-label="Close"
+                  className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-6">
                 <a
                   href={l.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-medium text-black hover:underline dark:text-zinc-50"
                 >
-                  {l.title}
+                  {l.title} ↗
                 </a>
                 {typeof l.match_score === "number" && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -541,13 +653,6 @@ export default function Home() {
                   {l.price && (
                     <span>
                       {l.price}
-                      {showPartsCost && parts[l.url]?.data && partsTotal(parts[l.url]!.data!) > 0 && (
-                        <span className="text-zinc-500 dark:text-zinc-400">
-                          {" "}
-                          + ~€{partsTotal(parts[l.url]!.data!).toLocaleString()} parts ≈ €
-                          {((price ?? 0) + partsTotal(parts[l.url]!.data!)).toLocaleString()}
-                        </span>
-                      )}
                     </span>
                   )}
                   {badge && (
@@ -590,8 +695,6 @@ export default function Home() {
                 {verdicts[l.url]?.data && (() => {
                   const data = verdicts[l.url]!.data!;
                   const expanded = expandedVerdicts.has(l.url);
-                  const diyIssues = data.issues.filter((i) => i.difficulty === "diy").map((i) => i.issue);
-                  const partsResult = parts[l.url];
                   return (
                   <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
                     <button
@@ -685,60 +788,14 @@ export default function Home() {
                       substitute for an in-person inspection.
                     </p>
 
-                    {showPartsCost && diyIssues.length > 0 && (
+                    {showPartsCost && diyIssues.length > 0 && !partsResult && (
                       <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
-                        {!partsResult && (
-                          <button
-                            onClick={() => fetchParts(l.url, diyIssues)}
-                            className="text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
-                          >
-                            Find parts needed
-                          </button>
-                        )}
-                        {partsResult?.loading && (
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">Looking up parts…</p>
-                        )}
-                        {partsResult?.error && (
-                          <p className="text-xs text-red-600 dark:text-red-400">{partsResult.error}</p>
-                        )}
-                        {partsResult?.data && (
-                          <div>
-                            <p className="text-xs font-medium text-black dark:text-zinc-50">Parts checklist</p>
-                            <ul className="mt-1.5 flex flex-col gap-1.5">
-                              {partsResult.data.map((p) => {
-                                const partKey = `${l.url}::${p.part_name}`;
-                                return (
-                                  <li key={partKey} className="flex items-start gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                                    <input
-                                      type="checkbox"
-                                      checked={checkedParts.has(partKey)}
-                                      onChange={() => togglePartChecked(partKey)}
-                                      className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-zinc-300 dark:border-zinc-700"
-                                    />
-                                    <span>
-                                      {p.part_name}
-                                      {p.price && <span className="ml-1 font-medium text-black dark:text-zinc-50">{p.price}</span>}
-                                      {p.url && (
-                                        <a
-                                          href={p.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="ml-1 underline decoration-zinc-400 underline-offset-2"
-                                        >
-                                          {p.price ? "best deal found" : "shop this part"}
-                                        </a>
-                                      )}
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-600">
-                              From kfzteile24.de - most parts there need your exact model/engine picked on-site to show
-                              a price, so links usually go to the right part category rather than a priced listing.
-                            </p>
-                          </div>
-                        )}
+                        <button
+                          onClick={() => fetchParts(l.url, diyIssues)}
+                          className="text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                        >
+                          Find parts needed
+                        </button>
                       </div>
                     )}
                     </>
@@ -746,13 +803,104 @@ export default function Home() {
                   </div>
                   );
                 })()}
-                </div>
-              </li>
-              );
-            })}
-          </ul>
-          </>
-        )}
+
+                {showPartsCost && (
+                  <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
+                    <p className="font-medium text-black dark:text-zinc-50">Build your car</p>
+
+                    {partsResult?.loading && (
+                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Looking up parts…</p>
+                    )}
+                    {partsResult?.error && (
+                      <p className="mt-2 text-xs text-red-600 dark:text-red-400">{partsResult.error}</p>
+                    )}
+
+                    {allParts.length > 0 && (
+                      <ul className="mt-2 flex flex-col gap-1.5">
+                        {allParts.map((p, i) => {
+                          const isCustom = i >= (partsResult?.data?.length ?? 0);
+                          const key = partKey(p, isCustom);
+                          return (
+                            <li key={key} className="flex items-start gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                              <input
+                                type="checkbox"
+                                checked={checkedParts.has(key)}
+                                onChange={() => togglePartChecked(key)}
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-zinc-300 dark:border-zinc-700"
+                              />
+                              <span className="flex-1">
+                                {p.part_name}
+                                {p.price && <span className="ml-1 font-medium text-black dark:text-zinc-50">{p.price}</span>}
+                                {p.url && (
+                                  <a
+                                    href={p.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="ml-1 underline decoration-zinc-400 underline-offset-2"
+                                  >
+                                    {p.price ? "best deal found" : "shop this part"}
+                                  </a>
+                                )}
+                              </span>
+                              {isCustom && (
+                                <button
+                                  onClick={() => removeCustomPart(l.url, i - (partsResult?.data?.length ?? 0))}
+                                  aria-label="Remove"
+                                  className="shrink-0 text-zinc-400 hover:text-red-600 dark:text-zinc-500"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {allParts.some((p) => p.url) && (
+                      <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-600">
+                        Parts from kfzteile24.de - most need your exact model/engine picked on-site to show a
+                        price, so links usually go to the right part category rather than a priced listing.
+                      </p>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input
+                        value={newPartName}
+                        onChange={(e) => setNewPartName(e.target.value)}
+                        placeholder="Add a part (e.g. Exhaust tips)"
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                      />
+                      <input
+                        value={newPartPrice}
+                        onChange={(e) => setNewPartPrice(e.target.value)}
+                        placeholder="€ (optional)"
+                        className="w-24 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                      />
+                      <button
+                        onClick={() => addCustomPart(l.url)}
+                        disabled={!newPartName.trim()}
+                        className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    <p className="mt-3 text-sm font-medium text-black dark:text-zinc-50">
+                      Your build: €{buildTotal(price, checkedItems).toLocaleString()}
+                      {checkedItems.length > 0 && (
+                        <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                          {" "}
+                          (car + {checkedItems.length} checked part{checkedItems.length === 1 ? "" : "s"})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          );
+        })()}
       </main>
     </div>
   );
