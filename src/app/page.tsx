@@ -528,7 +528,17 @@ export default function Home() {
 
             {sortedListings.length === 0 && (
               <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-                No results match these filters.
+                No results match these filters.{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceFilter(new Set());
+                    setMaxPrice("");
+                  }}
+                  className="font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                >
+                  Clear filters
+                </button>
               </p>
             )}
 
