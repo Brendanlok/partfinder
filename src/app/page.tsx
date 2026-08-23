@@ -1,6 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+// Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
+// lib (still non-standard/prefixed in some browsers), so type it loosely ourselves.
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: { results: { [i: number]: { [j: number]: { transcript: string } } } }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+};
 
 const SEARCH_STATUS_MESSAGES = [
   "Searching mobile.de, AutoScout24 & Kleinanzeigen…",
@@ -132,7 +149,9 @@ export default function Home() {
   const [sortBy, setSortBy] = useState<SortOption>("relevance");
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
   const [maxPrice, setMaxPrice] = useState("");
-  const [speakingUrl, setSpeakingUrl] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   // Restore the last successful search on load, so a refresh/back-nav doesn't
   // lose results (and force a re-search that burns another API call).
@@ -158,36 +177,35 @@ export default function Home() {
     return () => clearInterval(id);
   }, [loading]);
 
-  // Stop any in-progress speech if the component unmounts mid-read.
+  // Checked in an effect (not inline in render) so the server-rendered static export
+  // and the client's first render match - window/SpeechRecognition don't exist at build time.
   useEffect(() => {
-    return () => {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
-    };
+    const w = window as SpeechRecognitionWindow;
+    setSpeechSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
+    return () => recognitionRef.current?.stop();
   }, []);
 
-  function toggleSpeak(listing: Listing) {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    if (speakingUrl === listing.url) {
-      setSpeakingUrl(null);
+  function toggleListen() {
+    if (listening) {
+      recognitionRef.current?.stop();
       return;
     }
-    const parts = [listing.title];
-    if (listing.price) parts.push(listing.price);
-    if (listing.year) parts.push(listing.year);
-    if (listing.mileage_km) parts.push(`${listing.mileage_km} kilometers`);
-    if (listing.location) parts.push(listing.location);
-    if (listing.match_tags?.length) parts.push(listing.match_tags.join(", "));
-    const verdict = verdicts[listing.url]?.data;
-    if (verdict) {
-      parts.push(VERDICT_LABEL[verdict.verdict]);
-      parts.push(verdict.condition_summary);
-    }
-    const utter = new SpeechSynthesisUtterance(parts.join(". "));
-    utter.onend = () => setSpeakingUrl(null);
-    utter.onerror = () => setSpeakingUrl(null);
-    window.speechSynthesis.speak(utter);
-    setSpeakingUrl(listing.url);
+    const w = window as SpeechRecognitionWindow;
+    const SpeechRecognitionCtor = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = navigator.language || "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (e) => {
+      const transcript = e.results?.[0]?.[0]?.transcript;
+      if (transcript) setWant(transcript);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
   }
 
   async function checkCondition(listing: Listing) {
@@ -308,13 +326,25 @@ export default function Home() {
         </p>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <input
-            value={want}
-            onChange={(e) => setWant(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && search()}
-            placeholder="e.g. BMW E46 M3, manual, under 20k, good condition"
-            className="w-full flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-          />
+          <div className="relative flex-1">
+            <input
+              value={want}
+              onChange={(e) => setWant(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && search()}
+              placeholder="e.g. BMW E46 M3, manual, under 20k, good condition"
+              className={`w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 ${speechSupported ? "pr-11" : ""}`}
+            />
+            {speechSupported && (
+              <button
+                type="button"
+                onClick={toggleListen}
+                aria-label={listening ? "Stop voice input" : "Speak your search"}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 ${listening ? "text-red-500" : "text-zinc-400 hover:text-black dark:text-zinc-500 dark:hover:text-zinc-50"}`}
+              >
+                {listening ? "⏹" : "🎤"}
+              </button>
+            )}
+          </div>
           <button
             onClick={search}
             disabled={loading || !want.trim()}
@@ -406,23 +436,14 @@ export default function Home() {
                   />
                 )}
                 <div className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <a
-                    href={l.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-black hover:underline dark:text-zinc-50"
-                  >
-                    {l.title}
-                  </a>
-                  <button
-                    onClick={() => toggleSpeak(l)}
-                    aria-label={speakingUrl === l.url ? "Stop reading" : "Read listing aloud"}
-                    className="shrink-0 text-zinc-400 hover:text-black dark:text-zinc-500 dark:hover:text-zinc-50"
-                  >
-                    {speakingUrl === l.url ? "⏹" : "🔊"}
-                  </button>
-                </div>
+                <a
+                  href={l.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-black hover:underline dark:text-zinc-50"
+                >
+                  {l.title}
+                </a>
                 {typeof l.match_score === "number" && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${matchColor(l.match_score)}`}>
