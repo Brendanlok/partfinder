@@ -858,8 +858,9 @@ export default function Home() {
                     )}
                     {allParts.some((p) => p.url) && (
                       <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-600">
-                        Parts from kfzteile24.de - most need your exact model/engine picked on-site to show a
-                        price, so links usually go to the right part category rather than a priced listing.
+                        Parts from kfzteile24.de and daparto.de (a price-comparison site) - daparto.de results
+                        usually show a real price, kfzteile24.de usually needs your exact model/engine picked
+                        on-site so those links go to the right part category rather than a priced listing.
                       </p>
                     )}
 

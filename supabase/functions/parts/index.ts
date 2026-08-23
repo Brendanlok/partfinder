@@ -1,9 +1,11 @@
 // Runs server-side on Supabase Edge Functions (Deno). Given the DIY issues from a
-// condition check, estimates real replacement-part prices from a German parts retailer
-// that allows automated access. autodoc.de blocks bots (403, same as mobile.de - see
-// search/index.ts); kfzteile24.de doesn't, so that's the only source for now.
-// TAVILY_API_KEY / GEMINI_API_KEY stay function secrets.
-const PARTS_SITE = "kfzteile24.de";
+// condition check, estimates real replacement-part prices from German parts sites that
+// allow automated access. autodoc.de blocks bots (403, same as mobile.de - see
+// search/index.ts), so it's excluded. daparto.de is a price-comparison aggregator across
+// 150+ shops and (confirmed live) actually shows real prices in its static HTML, unlike
+// kfzteile24.de whose prices are client-side JS-rendered - kept both rather than replacing,
+// daparto.de just does most of the price-finding work in practice.
+const PARTS_SITES = ["kfzteile24.de", "daparto.de"];
 
 // ponytail: caps Tavily calls per click, not per issue - this is a user-initiated,
 // repeatable action against the same shared monthly Tavily quota the search function
@@ -25,7 +27,7 @@ async function searchOne(issue: string, germanQuery: string): Promise<{ issue: s
       body: JSON.stringify({
         api_key: Deno.env.get("TAVILY_API_KEY"),
         query: germanQuery,
-        include_domains: [PARTS_SITE],
+        include_domains: PARTS_SITES,
         search_depth: "basic",
         max_results: 5,
       }),
@@ -137,7 +139,7 @@ Deno.serve(async (req: Request) => {
               {
                 text: `A used car buyer wants to estimate the cost of fixing these issues on a car (${carDescription}):\n${JSON.stringify(
                   capped
-                )}\n\nHere are real search results from a German car parts retailer (kfzteile24.de) for each issue:\n${JSON.stringify(
+                )}\n\nHere are real search results from German car parts sites (kfzteile24.de, daparto.de - a price-comparison site) for each issue:\n${JSON.stringify(
                   searches
                 )}\n\nFor each issue, name the specific replacement part needed (short, e.g. "Front brake pads") and, only if one of that issue's search results genuinely shows a real price, give the best (lowest) price found plus its exact url and page title copied verbatim from that result - never estimate, round, or invent a price, url, or title that isn't directly present in a result. If no result shows a real price for an issue, leave price/url/source_title out entirely for it. Return JSON only.`,
               },
@@ -189,11 +191,11 @@ Deno.serve(async (req: Request) => {
   const MAX_FIELD_LEN = 60;
 
   // kfzteile24.de renders its prices client-side via JS (confirmed: fetching a real product
-  // page's HTML directly has no price anywhere in it, not even in meta/structured-data tags)
-  // - so a real price coming back from Tavily's snippet is rare. Gemini's price/url is a
-  // bonus when genuinely present; the shopping link itself always falls back to Tavily's own
-  // top real result for that issue (deterministic, never LLM-touched) so the checklist still
-  // points somewhere real and useful even on the (usual) no-price case.
+  // page's HTML directly has no price anywhere in it) so a real price from that site is rare;
+  // daparto.de (a price-comparison aggregator) does show real prices in its static HTML, so
+  // most found prices should come from there. Either way, the shopping link always falls back
+  // to Tavily's own top real result for that issue (deterministic, never LLM-touched) so the
+  // checklist still points somewhere real and useful even on a no-price case.
   const topResultByIssue = new Map(searches.map((s) => [s.issue, s.results[0] ?? null]));
   const parts = (parsed.parts ?? []).map((p: Record<string, unknown>) => {
     const clean = { ...p };
