@@ -137,6 +137,16 @@ Deno.serve(async (req: Request) => {
       OPTIONAL_FIELDS.some((k) => typeof l[k] === "string" && (l[k] as string).length > MAX_FIELD_LEN)
     );
 
+  // ponytail: confirmed live - Gemini occasionally puts a price string ("12900 €") in
+  // mileage_km or year despite the prompt saying "never a price". These two fields have
+  // a checkable shape, unlike price/location, so reject anything that doesn't fit it
+  // rather than trusting the field name alone.
+  const isWrongShape = (key: string, raw: string): boolean => {
+    if (key === "mileage_km") return !/^\d+$/.test(raw.trim());
+    if (key === "year") return !/^(19|20)\d{2}$/.test(raw.trim());
+    return false;
+  };
+
   async function askGemini(): Promise<{ listings: Record<string, unknown>[] } | null> {
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
@@ -148,13 +158,13 @@ Deno.serve(async (req: Request) => {
             {
               parts: [
                 {
-                  text: `A user wants this car in Germany: "${want}"\n\nHere are raw search results from German car marketplaces (mobile.de, autoscout24.de, kleinanzeigen.de), already filtered to single-listing pages:\n${JSON.stringify(
+                  text: `A user wants this car in Germany: "${want}"\n\nHere are raw search results from German car marketplaces (mobile.de, autoscout24.de, kleinanzeigen.de). Each entry's URL already points to exactly one specific car's own ad page, not a category or hub page:\n${JSON.stringify(
                     rawResults.map((r: { title: string; url: string; content: string }) => ({
                       title: r.title,
                       url: r.url,
                       snippet: r.content,
                     }))
-                  )}\n\nPull out every distinct real car mentioned that plausibly matches what the user wants (skip generic articles/guides with no specific car for sale). One entry per car, even if several share the same source URL - that's fine, the URL is just where to click through and find it. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year, mileage_km (a km distance as digits only, no "km" suffix and never a price - or null if not shown), location, source site. Each field must be the short raw value only - never explanations or reasoning. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Return JSON only.`,
+                  )}\n\nReturn exactly one listing entry per raw result URL above (skip an entry only if it's a generic article/guide with no specific car for sale, or plainly doesn't match what the user wants) - never invent a second or third car out of one URL's title/snippet, and never reuse one URL under a different car's specs. Use that URL's own title/snippet only for its entry. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year, mileage_km (a km distance as digits only, no "km" suffix and never a price - or null if not shown), location, source site. Each field must be the short raw value only - never explanations or reasoning. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Return JSON only.`,
                 },
               ],
             },
@@ -220,7 +230,8 @@ Deno.serve(async (req: Request) => {
       const v = raw?.trim().toLowerCase() ?? null;
       const isZero = (key === "price" || key === "mileage_km") && v === "0";
       const isLeakedField = raw !== null && raw.length > MAX_FIELD_LEN;
-      if (v !== null && (v === key || isZero || isLeakedField)) delete clean[key];
+      const isBadShape = raw !== null && isWrongShape(key, raw);
+      if (v !== null && (v === key || isZero || isLeakedField || isBadShape)) delete clean[key];
     }
     // clamp in case Gemini strays outside the 0-100 range it was asked for
     if (typeof clean.match_score === "number") {
@@ -229,5 +240,21 @@ Deno.serve(async (req: Request) => {
     return clean;
   });
 
-  return Response.json({ listings }, { headers: corsHeaders });
+  // ponytail: backstop for the prompt instruction above, not a replacement for it - if
+  // Gemini still splits one URL into multiple "cars" (seen live: same URL given two
+  // different years/mileages, and once a title mismatched its URL's real car entirely),
+  // keeping every one of them would show fabricated specs on a real, differently-priced
+  // link. A single URL can only be one real car, so keep just its best-match_score entry.
+  const bestByUrl = new Map<string, Record<string, unknown>>();
+  for (const l of listings) {
+    const url = typeof l.url === "string" ? l.url : null;
+    if (!url) continue;
+    const existing = bestByUrl.get(url);
+    if (!existing || ((l.match_score as number) ?? 0) > ((existing.match_score as number) ?? 0)) {
+      bestByUrl.set(url, l);
+    }
+  }
+  const dedupedListings = [...bestByUrl.values()];
+
+  return Response.json({ listings: dedupedListings }, { headers: corsHeaders });
 });
