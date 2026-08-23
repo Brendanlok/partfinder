@@ -18,6 +18,7 @@ type Listing = {
   source: string;
   match_score?: number;
   match_tags?: string[];
+  image?: string;
 };
 
 function matchColor(score: number): string {
@@ -393,8 +394,18 @@ export default function Home() {
               return (
               <li
                 key={l.url}
-                className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+                className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
               >
+                {l.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={l.image}
+                    alt=""
+                    className="h-44 w-full object-cover"
+                    loading="lazy"
+                  />
+                )}
+                <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <a
                     href={l.url}
@@ -547,6 +558,7 @@ export default function Home() {
                     </p>
                   </div>
                 )}
+                </div>
               </li>
               );
             })}

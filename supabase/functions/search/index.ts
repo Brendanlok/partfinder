@@ -42,14 +42,29 @@ async function crawlForListingUrls(hubUrl: string): Promise<string[]> {
 
 // Real title/description straight from the ad page's meta tags, not an LLM guess -
 // keeps the crawl fallback as fabrication-proof as the direct-hit path.
-async function fetchListingSnippet(url: string): Promise<{ title: string; content: string } | null> {
+async function fetchListingSnippet(url: string): Promise<{ title: string; content: string; image: string | null } | null> {
   try {
     const res = await fetch(url, { headers: { "User-Agent": UA } });
     if (!res.ok) return null;
     const html = await res.text();
     const title = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1];
     const content = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/)?.[1] ?? "";
-    return title ? { title, content } : null;
+    const image = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/)?.[1] ?? null;
+    return title ? { title, content, image } : null;
+  } catch {
+    return null;
+  }
+}
+
+// Photos are shown in the results list now, so every listing needs one fetched - direct
+// Tavily hits previously skipped fetching their page entirely (title/content come straight
+// from Tavily). Only the image is needed here, Tavily's own title/content stay authoritative.
+async function fetchImage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/)?.[1] ?? null;
   } catch {
     return null;
   }
@@ -97,9 +112,14 @@ Deno.serve(async (req: Request) => {
   const tavilyData = await tavilyRes.json();
   // ponytail: Tavily's include_domains isn't a hard filter in practice, so enforce it ourselves
   const onListingSite = (r: { url: string }) => LISTING_SITES.some((site) => new URL(r.url).hostname.endsWith(site));
-  const directResults = (tavilyData.results ?? []).filter(
+  const directResultsRaw = (tavilyData.results ?? []).filter(
     (r: { url: string }) => onListingSite(r) && isSingleListingUrl(r.url)
   );
+  const directImages = await Promise.all(directResultsRaw.map((r: { url: string }) => fetchImage(r.url)));
+  const directResults = directResultsRaw.map((r: { title: string; url: string; content: string }, i: number) => ({
+    ...r,
+    image: directImages[i],
+  }));
 
   // ponytail: always run the crawl fallback too, not only when direct hits are zero (root
   // cause of the P1 empty-results bug, confirmed via debug endpoints this session: Tavily's
@@ -111,8 +131,10 @@ Deno.serve(async (req: Request) => {
   const crawledUrls = [...new Set((await Promise.all(hubUrls.map(crawlForListingUrls))).flat())].slice(0, 8);
   const snippets = await Promise.all(crawledUrls.map(fetchListingSnippet));
   const crawledResults = crawledUrls
-    .map((url, i) => (snippets[i] ? { title: snippets[i]!.title, url, content: snippets[i]!.content } : null))
-    .filter((r: unknown): r is { title: string; url: string; content: string } => !!r);
+    .map((url, i) =>
+      snippets[i] ? { title: snippets[i]!.title, url, content: snippets[i]!.content, image: snippets[i]!.image } : null
+    )
+    .filter((r: unknown): r is { title: string; url: string; content: string; image: string | null } => !!r);
 
   const seenUrls = new Set<string>();
   const rawResults = [...directResults, ...crawledResults].filter((r: { url: string }) => {
@@ -120,6 +142,10 @@ Deno.serve(async (req: Request) => {
     seenUrls.add(r.url);
     return true;
   });
+
+  // Image is real metadata fetched straight from each ad's own page, not something Gemini
+  // extracts - keep it out of the prompt (saves tokens) and merge it back in by URL after.
+  const imageByUrl = new Map(rawResults.map((r: { url: string; image: string | null }) => [r.url, r.image]));
 
   if (rawResults.length === 0) {
     return Response.json({ listings: [] }, { headers: corsHeaders });
@@ -254,7 +280,10 @@ Deno.serve(async (req: Request) => {
       bestByUrl.set(url, l);
     }
   }
-  const dedupedListings = [...bestByUrl.values()];
+  const dedupedListings = [...bestByUrl.values()].map((l) => {
+    const image = typeof l.url === "string" ? imageByUrl.get(l.url) : null;
+    return image ? { ...l, image } : l;
+  });
 
   return Response.json({ listings: dedupedListings }, { headers: corsHeaders });
 });
