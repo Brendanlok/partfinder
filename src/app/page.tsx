@@ -124,6 +124,26 @@ type TutorialState = {
   data?: Tutorial;
 };
 
+type PartEstimate = {
+  issue: string;
+  part_name: string;
+  price?: string;
+  url?: string;
+  source_title?: string;
+};
+
+type PartsState = {
+  loading?: boolean;
+  error?: string;
+  data?: PartEstimate[];
+};
+
+// Sums whatever priced parts came back - unpriced ones (no result found) are excluded,
+// not treated as €0, so the total never understates cost by silently dropping a part.
+function partsTotal(parts: PartEstimate[]): number {
+  return parts.reduce((sum, p) => sum + (parsePrice(p.price) ?? 0), 0);
+}
+
 type VerdictState = {
   loading?: boolean;
   error?: string;
@@ -152,6 +172,28 @@ export default function Home() {
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const [expandedVerdicts, setExpandedVerdicts] = useState<Set<string>>(new Set());
+  const [showPartsCost, setShowPartsCost] = useState(false);
+  const [parts, setParts] = useState<Record<string, PartsState>>({});
+  const [checkedParts, setCheckedParts] = useState<Set<string>>(new Set());
+
+  function toggleVerdictExpanded(url: string) {
+    setExpandedVerdicts((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  }
+
+  function togglePartChecked(key: string) {
+    setCheckedParts((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   // Restore the last successful search on load, so a refresh/back-nav doesn't
   // lose results (and force a re-search that burns another API call).
@@ -256,6 +298,30 @@ export default function Home() {
     }
   }
 
+  // One click estimates all of a listing's DIY issues at once (capped server-side) rather
+  // than one call per issue - keeps this to a bounded, user-initiated Tavily/Gemini cost.
+  async function fetchParts(listingUrl: string, issues: string[]) {
+    setParts((p) => ({ ...p, [listingUrl]: { loading: true } }));
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_PARTS_FUNCTION_URL as string, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ issues, want }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't estimate parts cost.");
+      setParts((p) => ({ ...p, [listingUrl]: { data: data.parts } }));
+    } catch (e) {
+      setParts((p) => ({
+        ...p,
+        [listingUrl]: { error: e instanceof Error ? e.message : "Couldn't estimate parts cost." },
+      }));
+    }
+  }
+
   async function search() {
     if (!want.trim()) return;
     setLoading(true);
@@ -316,7 +382,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black px-4 py-10 sm:py-16">
-      <main className="mx-auto max-w-xl">
+      <main className="mx-auto max-w-3xl">
         <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
           Partfinder
         </h1>
@@ -403,6 +469,18 @@ export default function Home() {
                   {s}
                 </label>
               ))}
+              <label
+                className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400"
+                title="Ad price only, or also look up which parts a checked issue needs and where to buy them"
+              >
+                <input
+                  type="checkbox"
+                  checked={showPartsCost}
+                  onChange={(e) => setShowPartsCost(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                />
+                + Parts needed
+              </label>
             </div>
 
             {sortedListings.length === 0 && (
@@ -424,18 +502,18 @@ export default function Home() {
               return (
               <li
                 key={l.url}
-                className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 sm:flex sm:items-stretch"
               >
                 {l.image && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={l.image}
                     alt=""
-                    className="h-44 w-full object-cover"
+                    className="h-44 w-full object-cover sm:h-auto sm:w-56 sm:flex-shrink-0"
                     loading="lazy"
                   />
                 )}
-                <div className="p-4">
+                <div className="min-w-0 flex-1 p-4">
                 <a
                   href={l.url}
                   target="_blank"
@@ -460,7 +538,18 @@ export default function Home() {
                   </div>
                 )}
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {l.price && <span>{l.price}</span>}
+                  {l.price && (
+                    <span>
+                      {l.price}
+                      {showPartsCost && parts[l.url]?.data && partsTotal(parts[l.url]!.data!) > 0 && (
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          {" "}
+                          + ~€{partsTotal(parts[l.url]!.data!).toLocaleString()} parts ≈ €
+                          {((price ?? 0) + partsTotal(parts[l.url]!.data!)).toLocaleString()}
+                        </span>
+                      )}
+                    </span>
+                  )}
                   {badge && (
                     <span
                       className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
@@ -498,17 +587,35 @@ export default function Home() {
                   </p>
                 )}
 
-                {verdicts[l.url]?.data && (
+                {verdicts[l.url]?.data && (() => {
+                  const data = verdicts[l.url]!.data!;
+                  const expanded = expandedVerdicts.has(l.url);
+                  const diyIssues = data.issues.filter((i) => i.difficulty === "diy").map((i) => i.issue);
+                  const partsResult = parts[l.url];
+                  return (
                   <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
-                    <p className="font-medium text-black dark:text-zinc-50">
-                      {VERDICT_LABEL[verdicts[l.url]!.data!.verdict]}
+                    <button
+                      onClick={() => toggleVerdictExpanded(l.url)}
+                      className="flex w-full items-center justify-between gap-2 text-left"
+                    >
+                      <span>
+                        <span className="font-medium text-black dark:text-zinc-50">{VERDICT_LABEL[data.verdict]}</span>
+                        {data.issues.length > 0 && (
+                          <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">
+                            · {data.issues.length} issue{data.issues.length === 1 ? "" : "s"} found
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-zinc-400 dark:text-zinc-500">{expanded ? "Hide ▲" : "Details ▼"}</span>
+                    </button>
+                    {expanded && (
+                    <>
+                    <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+                      {data.condition_summary}
                     </p>
-                    <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-                      {verdicts[l.url]!.data!.condition_summary}
-                    </p>
-                    {verdicts[l.url]!.data!.issues.length > 0 && (
+                    {data.issues.length > 0 && (
                       <ul className="mt-2 list-inside list-disc text-zinc-600 dark:text-zinc-400">
-                        {verdicts[l.url]!.data!.issues.map((item, i) => (
+                        {data.issues.map((item, i) => (
                           <li key={i}>
                             {item.issue}{" "}
                             <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
@@ -573,12 +680,72 @@ export default function Home() {
                       </ul>
                     )}
                     <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-600">
-                      From {verdicts[l.url]!.data!.photos_checked} listing photo
-                      {verdicts[l.url]!.data!.photos_checked === 1 ? "" : "s"} - not a
+                      From {data.photos_checked} listing photo
+                      {data.photos_checked === 1 ? "" : "s"} - not a
                       substitute for an in-person inspection.
                     </p>
+
+                    {showPartsCost && diyIssues.length > 0 && (
+                      <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                        {!partsResult && (
+                          <button
+                            onClick={() => fetchParts(l.url, diyIssues)}
+                            className="text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                          >
+                            Find parts needed
+                          </button>
+                        )}
+                        {partsResult?.loading && (
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">Looking up parts…</p>
+                        )}
+                        {partsResult?.error && (
+                          <p className="text-xs text-red-600 dark:text-red-400">{partsResult.error}</p>
+                        )}
+                        {partsResult?.data && (
+                          <div>
+                            <p className="text-xs font-medium text-black dark:text-zinc-50">Parts checklist</p>
+                            <ul className="mt-1.5 flex flex-col gap-1.5">
+                              {partsResult.data.map((p) => {
+                                const partKey = `${l.url}::${p.part_name}`;
+                                return (
+                                  <li key={partKey} className="flex items-start gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                                    <input
+                                      type="checkbox"
+                                      checked={checkedParts.has(partKey)}
+                                      onChange={() => togglePartChecked(partKey)}
+                                      className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-zinc-300 dark:border-zinc-700"
+                                    />
+                                    <span>
+                                      {p.part_name}
+                                      {p.price && <span className="ml-1 font-medium text-black dark:text-zinc-50">{p.price}</span>}
+                                      {p.url && (
+                                        <a
+                                          href={p.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="ml-1 underline decoration-zinc-400 underline-offset-2"
+                                        >
+                                          {p.price ? "best deal found" : "shop this part"}
+                                        </a>
+                                      )}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-600">
+                              From kfzteile24.de - most parts there need your exact model/engine picked on-site to show
+                              a price, so links usually go to the right part category rather than a priced listing.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    </>
+                    )}
                   </div>
-                )}
+                  );
+                })()}
                 </div>
               </li>
               );
