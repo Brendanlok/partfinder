@@ -186,6 +186,10 @@ export default function Home() {
   const [newPartName, setNewPartName] = useState("");
   const [newPartPrice, setNewPartPrice] = useState("");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+  // A scraped og:image can 404 or hotlink-block by the time the browser (not our
+  // server) loads it - track failures so those listings fall back to the 🚗
+  // placeholder instead of showing a broken-image icon.
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
 
   // Escape closes the detail modal, same as clicking the backdrop or the × button.
   useEffect(() => {
@@ -546,9 +550,15 @@ export default function Home() {
                   className="block w-full overflow-hidden rounded-lg border border-zinc-200 bg-white text-left dark:border-zinc-800 dark:bg-zinc-900"
                 >
                   <div className="aspect-[4/3] w-full bg-zinc-100 dark:bg-zinc-800">
-                    {l.image ? (
+                    {l.image && !brokenImages.has(l.url) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={l.image} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      <img
+                        src={l.image}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        onError={() => setBrokenImages((prev) => new Set(prev).add(l.url))}
+                      />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-3xl text-zinc-300 dark:text-zinc-700">
                         🚗
@@ -608,9 +618,14 @@ export default function Home() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="relative aspect-[16/9] w-full bg-zinc-100 dark:bg-zinc-800">
-                {l.image ? (
+                {l.image && !brokenImages.has(l.url) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={l.image} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={l.image}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    onError={() => setBrokenImages((prev) => new Set(prev).add(l.url))}
+                  />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-5xl text-zinc-300 dark:text-zinc-700">
                     🚗
