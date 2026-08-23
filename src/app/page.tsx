@@ -211,8 +211,12 @@ export default function Home() {
     }
   }
 
-  async function fetchTutorial(issue: string) {
-    setTutorials((t) => ({ ...t, [issue]: { loading: true } }));
+  // Cache key is listing URL + issue text, not issue text alone - two different cars can
+  // surface the same issue wording (seen live: identical Gemini phrasing for unrelated
+  // listings), and issue text alone would show one listing's tutorial under another's.
+  async function fetchTutorial(listingUrl: string, issue: string) {
+    const key = `${listingUrl}::${issue}`;
+    setTutorials((t) => ({ ...t, [key]: { loading: true } }));
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_TUTORIAL_FUNCTION_URL as string, {
         method: "POST",
@@ -224,11 +228,11 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Couldn't load repair steps.");
-      setTutorials((t) => ({ ...t, [issue]: { data } }));
+      setTutorials((t) => ({ ...t, [key]: { data } }));
     } catch (e) {
       setTutorials((t) => ({
         ...t,
-        [issue]: { error: e instanceof Error ? e.message : "Couldn't load repair steps." },
+        [key]: { error: e instanceof Error ? e.message : "Couldn't load repair steps." },
       }));
     }
   }
@@ -478,57 +482,60 @@ export default function Home() {
                             <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
                               {DIFFICULTY_LABEL[item.difficulty]}
                             </span>
-                            {item.difficulty === "diy" && (
+                            {item.difficulty === "diy" && (() => {
+                              const tutorialKey = `${l.url}::${item.issue}`;
+                              return (
                               <>
-                                {!tutorials[item.issue] && (
+                                {!tutorials[tutorialKey] && (
                                   <button
-                                    onClick={() => fetchTutorial(item.issue)}
+                                    onClick={() => fetchTutorial(l.url, item.issue)}
                                     className="ml-2 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                                   >
                                     How to fix
                                   </button>
                                 )}
-                                {tutorials[item.issue]?.loading && (
+                                {tutorials[tutorialKey]?.loading && (
                                   <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
                                     Writing up steps…
                                   </span>
                                 )}
-                                {tutorials[item.issue]?.error && (
+                                {tutorials[tutorialKey]?.error && (
                                   <span className="ml-2 text-xs text-red-600 dark:text-red-400">
-                                    {tutorials[item.issue]?.error}
+                                    {tutorials[tutorialKey]?.error}
                                   </span>
                                 )}
-                                {tutorials[item.issue]?.data && (
+                                {tutorials[tutorialKey]?.data && (
                                   <div className="mt-2 rounded-lg bg-white p-2 text-xs dark:bg-zinc-900">
                                     <ol className="list-inside list-decimal text-zinc-600 dark:text-zinc-400">
-                                      {tutorials[item.issue]!.data!.steps.map((step, si) => (
+                                      {tutorials[tutorialKey]!.data!.steps.map((step, si) => (
                                         <li key={si} className="mt-1">
                                           {step}
                                         </li>
                                       ))}
                                     </ol>
-                                    {tutorials[item.issue]!.data!.video && (
+                                    {tutorials[tutorialKey]!.data!.video && (
                                       <a
-                                        href={tutorials[item.issue]!.data!.video!.url}
+                                        href={tutorials[tutorialKey]!.data!.video!.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="mt-2 flex items-center gap-2 text-black hover:underline dark:text-zinc-50"
                                       >
-                                        {tutorials[item.issue]!.data!.video!.thumbnail && (
+                                        {tutorials[tutorialKey]!.data!.video!.thumbnail && (
                                           // eslint-disable-next-line @next/next/no-img-element
                                           <img
-                                            src={tutorials[item.issue]!.data!.video!.thumbnail}
+                                            src={tutorials[tutorialKey]!.data!.video!.thumbnail}
                                             alt=""
                                             className="h-10 w-16 rounded object-cover"
                                           />
                                         )}
-                                        <span>▶ {tutorials[item.issue]!.data!.video!.title}</span>
+                                        <span>▶ {tutorials[tutorialKey]!.data!.video!.title}</span>
                                       </a>
                                     )}
                                   </div>
                                 )}
                               </>
-                            )}
+                              );
+                            })()}
                           </li>
                         ))}
                       </ul>
