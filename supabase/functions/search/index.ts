@@ -125,81 +125,102 @@ Deno.serve(async (req: Request) => {
     return Response.json({ listings: [] }, { headers: corsHeaders });
   }
 
-  const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `A user wants this car in Germany: "${want}"\n\nHere are raw search results from German car marketplaces (mobile.de, autoscout24.de, kleinanzeigen.de), already filtered to single-listing pages:\n${JSON.stringify(
-                  rawResults.map((r: { title: string; url: string; content: string }) => ({
-                    title: r.title,
-                    url: r.url,
-                    snippet: r.content,
-                  }))
-                )}\n\nPull out every distinct real car mentioned that plausibly matches what the user wants (skip generic articles/guides with no specific car for sale). One entry per car, even if several share the same source URL - that's fine, the URL is just where to click through and find it. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year, mileage_km (a km distance as digits only, no "km" suffix and never a price - or null if not shown), location, source site. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Return JSON only.`,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "object",
-            properties: {
-              listings: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    title: { type: "string" },
-                    url: { type: "string" },
-                    price: { type: "string" },
-                    year: { type: "string" },
-                    mileage_km: { type: "string" },
-                    location: { type: "string" },
-                    source: { type: "string" },
-                    match_score: { type: "number" },
-                    match_tags: { type: "array", items: { type: "string" } },
+  // ponytail: a real price/year/mileage/location is a few characters - several sentences
+  // of leaked chain-of-thought crammed into one field is not. Length is a cheap, reliable
+  // tell that responseSchema mode broke down (confirmed live: Gemini once dumped its
+  // reasoning for 8 listings into a single "year" field, syntactically valid JSON so the
+  // existing parse check didn't catch it).
+  const OPTIONAL_FIELDS = ["price", "year", "mileage_km", "location"];
+  const MAX_FIELD_LEN = 40;
+  const isLeaked = (listings: Record<string, unknown>[]) =>
+    listings.some((l) =>
+      OPTIONAL_FIELDS.some((k) => typeof l[k] === "string" && (l[k] as string).length > MAX_FIELD_LEN)
+    );
+
+  async function askGemini(): Promise<{ listings: Record<string, unknown>[] } | null> {
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: `A user wants this car in Germany: "${want}"\n\nHere are raw search results from German car marketplaces (mobile.de, autoscout24.de, kleinanzeigen.de), already filtered to single-listing pages:\n${JSON.stringify(
+                    rawResults.map((r: { title: string; url: string; content: string }) => ({
+                      title: r.title,
+                      url: r.url,
+                      snippet: r.content,
+                    }))
+                  )}\n\nPull out every distinct real car mentioned that plausibly matches what the user wants (skip generic articles/guides with no specific car for sale). One entry per car, even if several share the same source URL - that's fine, the URL is just where to click through and find it. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year, mileage_km (a km distance as digits only, no "km" suffix and never a price - or null if not shown), location, source site. Each field must be the short raw value only - never explanations or reasoning. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Return JSON only.`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                listings: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: { type: "string" },
+                      url: { type: "string" },
+                      price: { type: "string" },
+                      year: { type: "string" },
+                      mileage_km: { type: "string" },
+                      location: { type: "string" },
+                      source: { type: "string" },
+                      match_score: { type: "number" },
+                      match_tags: { type: "array", items: { type: "string" } },
+                    },
+                    required: ["title", "url", "source", "match_score"],
                   },
-                  required: ["title", "url", "source", "match_score"],
                 },
               },
+              required: ["listings"],
             },
-            required: ["listings"],
           },
-        },
-      }),
+        }),
+      }
+    );
+    if (!geminiRes.ok) return null;
+    const geminiData = await geminiRes.json();
+    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    try {
+      const parsed: { listings?: Record<string, unknown>[] } = JSON.parse(text);
+      return { listings: parsed.listings ?? [] };
+    } catch {
+      // ponytail: Gemini occasionally returns malformed/truncated JSON despite schema mode.
+      return null;
     }
-  );
-  if (!geminiRes.ok) {
-    return Response.json({ error: "Couldn't read the results, try again." }, { status: 502, headers: corsHeaders });
   }
-  const geminiData = await geminiRes.json();
-  const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-  let parsed: { listings?: unknown };
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    // ponytail: Gemini occasionally returns malformed/truncated JSON despite schema mode -
-    // fail with the same friendly-error shape as every other path here, not an uncaught 500.
+
+  let result = await askGemini();
+  if (result && isLeaked(result.listings)) {
+    result = (await askGemini()) ?? result;
+  }
+  if (!result) {
     return Response.json({ error: "Couldn't read the results, try again." }, { status: 502, headers: corsHeaders });
   }
 
   // ponytail: Gemini occasionally echoes a schema field's own name back as its value
-  // (e.g. year: "year"), or defaults price/mileage to "0" when it's actually unknown -
-  // neither is a real value, so strip both before they hit the UI.
-  const OPTIONAL_FIELDS = ["price", "year", "mileage_km", "location"];
-  const listings = (parsed.listings ?? []).map((l: Record<string, unknown>) => {
+  // (e.g. year: "year"), defaults price/mileage to "0" when it's actually unknown, or
+  // (still, even after the retry above) leaks reasoning text into a field - none of those
+  // are a real value, so strip all three before they hit the UI.
+  const listings = result.listings.map((l: Record<string, unknown>) => {
     const clean = { ...l };
     for (const key of OPTIONAL_FIELDS) {
-      const v = typeof clean[key] === "string" ? (clean[key] as string).trim().toLowerCase() : null;
+      const raw = typeof clean[key] === "string" ? (clean[key] as string) : null;
+      const v = raw?.trim().toLowerCase() ?? null;
       const isZero = (key === "price" || key === "mileage_km") && v === "0";
-      if (v !== null && (v === key || isZero)) delete clean[key];
+      const isLeakedField = raw !== null && raw.length > MAX_FIELD_LEN;
+      if (v !== null && (v === key || isZero || isLeakedField)) delete clean[key];
     }
     // clamp in case Gemini strays outside the 0-100 range it was asked for
     if (typeof clean.match_score === "number") {
