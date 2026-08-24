@@ -22,6 +22,17 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: "Missing issue description." }, { status: 400, headers: corsHeaders });
   }
 
+  // Everything below calls out to Gemini/YouTube - a network blip there throwing uncaught
+  // would skip corsHeaders entirely (Deno's default error response has none), so the
+  // browser reports a bare CORS failure instead of a real error message.
+  try {
+    return await handleTutorial(issue, want);
+  } catch {
+    return Response.json({ error: "Couldn't write up repair steps, try again." }, { status: 502, headers: corsHeaders });
+  }
+});
+
+async function handleTutorial(issue: string, want: unknown): Promise<Response> {
   const prompt = `A used car buyer found this issue: "${issue}" on a car they're considering (${want || "a used car"}).\n\nGive short, practical DIY-oriented repair steps - a numbered list, 3-6 steps, plain language, assume basic tools and no prior experience. If this issue genuinely isn't a reasonable DIY job, say so in one step instead of forcing a walkthrough. Return JSON only.`;
 
   const geminiRes = await fetch(
@@ -81,4 +92,4 @@ Deno.serve(async (req: Request) => {
   }
 
   return Response.json({ steps, video }, { headers: corsHeaders });
-});
+}

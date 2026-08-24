@@ -91,6 +91,17 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: "Describe the car you want." }, { status: 400, headers: corsHeaders });
   }
 
+  // Everything below calls out to Tavily/Gemini/listing sites - a network blip there
+  // throwing uncaught would skip corsHeaders entirely (Deno's default error response has
+  // none), so the browser reports a bare CORS failure instead of a real error message.
+  try {
+    return await handleSearch(want);
+  } catch {
+    return Response.json({ error: "Search failed, try again." }, { status: 502, headers: corsHeaders });
+  }
+});
+
+async function handleSearch(want: string): Promise<Response> {
   const tavilyRes = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -286,4 +297,4 @@ Deno.serve(async (req: Request) => {
   });
 
   return Response.json({ listings: dedupedListings }, { headers: corsHeaders });
-});
+}

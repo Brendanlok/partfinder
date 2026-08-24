@@ -116,6 +116,17 @@ Deno.serve(async (req: Request) => {
   const capped = (issues as string[]).slice(0, MAX_PARTS);
   const carDescription = typeof want === "string" && want ? want : "a used car";
 
+  // Everything below calls out to Tavily/Gemini - a network blip there throwing uncaught
+  // would skip corsHeaders entirely (Deno's default error response has none), so the
+  // browser reports a bare CORS failure instead of a real error message.
+  try {
+    return await handleParts(capped, carDescription);
+  } catch {
+    return Response.json({ error: "Couldn't estimate parts cost, try again." }, { status: 502, headers: corsHeaders });
+  }
+});
+
+async function handleParts(capped: string[], carDescription: string): Promise<Response> {
   const germanQueries = await toGermanPartQueries(capped, carDescription);
   const searches = await Promise.all(capped.map((issue) => searchOne(issue, germanQueries[issue])));
 
@@ -217,4 +228,4 @@ Deno.serve(async (req: Request) => {
   });
 
   return Response.json({ parts }, { headers: corsHeaders });
-});
+}

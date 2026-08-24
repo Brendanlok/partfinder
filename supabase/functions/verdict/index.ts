@@ -94,6 +94,17 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // Everything below fetches the listing page + Gemini - a network blip there throwing
+  // uncaught would skip corsHeaders entirely (Deno's default error response has none),
+  // so the browser reports a bare CORS failure instead of a real error message.
+  try {
+    return await handleVerdict(url, hostname, want);
+  } catch {
+    return Response.json({ error: "Couldn't read the photos, try again." }, { status: 502, headers: corsHeaders });
+  }
+});
+
+async function handleVerdict(url: string, hostname: string, want: unknown): Promise<Response> {
   const pageRes = await fetch(url, {
     headers: { "User-Agent": UA, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8" },
   });
@@ -165,4 +176,4 @@ Deno.serve(async (req: Request) => {
   }
 
   return Response.json({ ...parsed, photos_checked: imageParts.length }, { headers: corsHeaders });
-});
+}
