@@ -67,7 +67,9 @@ function sortListings(listings: Listing[], sortBy: SortOption): Listing[] {
       sorted.sort((a, b) => (Number(b.year) || 0) - (Number(a.year) || 0));
       break;
     case "mileage_asc":
-      sorted.sort((a, b) => (Number(a.mileage_km) || Infinity) - (Number(b.mileage_km) || Infinity));
+      // `|| Infinity` would treat a genuine 0 km listing (brand-new/demo car) as
+      // "unknown" and sort it last instead of first - only fall back on NaN/missing.
+      sorted.sort((a, b) => (parseMileage(a.mileage_km) ?? Infinity) - (parseMileage(b.mileage_km) ?? Infinity));
       break;
     default:
       sorted.sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1));
@@ -79,6 +81,12 @@ function parsePrice(price?: string): number | null {
   if (!price) return null;
   const digits = price.replace(/[^\d]/g, "");
   return digits ? Number(digits) : null;
+}
+
+function parseMileage(mileage?: string): number | null {
+  if (mileage === undefined) return null;
+  const n = Number(mileage);
+  return Number.isNaN(n) ? null : n;
 }
 
 function medianPrice(listings: Listing[]): number | null {
