@@ -188,6 +188,7 @@ export default function Home() {
   const [statusIndex, setStatusIndex] = useState(0);
   const [sortBy, setSortBy] = useState<SortOption>("relevance");
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
+  const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -409,6 +410,7 @@ export default function Home() {
     setListings(null);
     setSortBy("relevance");
     setSourceFilter(new Set());
+    setMinPrice("");
     setMaxPrice("");
     setShowSaved(false);
     try {
@@ -445,9 +447,10 @@ export default function Home() {
   const filteredListings = displayedListings
     ? displayedListings.filter((l) => {
         if (sourceFilter.has(l.source)) return false;
-        if (maxPrice) {
+        if (minPrice || maxPrice) {
           const p = parsePrice(l.price);
-          if (p !== null && p > Number(maxPrice)) return false;
+          if (p !== null && minPrice && p < Number(minPrice)) return false;
+          if (p !== null && maxPrice && p > Number(maxPrice)) return false;
         }
         return true;
       })
@@ -553,10 +556,18 @@ export default function Home() {
               <input
                 type="number"
                 inputMode="numeric"
+                value={minPrice}
+                onChange={(e) => setMinPrice(e.target.value)}
+                placeholder="Min price €"
+                className="w-28 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+              <input
+                type="number"
+                inputMode="numeric"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(e.target.value)}
                 placeholder="Max price €"
-                className="w-32 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                className="w-28 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               />
               {availableSources.map((s) => (
                 <label key={s} className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
@@ -590,6 +601,7 @@ export default function Home() {
                   type="button"
                   onClick={() => {
                     setSourceFilter(new Set());
+                    setMinPrice("");
                     setMaxPrice("");
                   }}
                   className="font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
