@@ -132,6 +132,11 @@ type PartEstimate = {
   source_title?: string;
 };
 
+// Custom (user-added) parts get a stable id at creation - keying by part_name alone
+// let two identically-named custom parts (or two Gemini-returned parts that happen to
+// share a name) collide in the checkedParts Set, so checking one silently checked both.
+type CustomPart = PartEstimate & { id: string };
+
 type PartsState = {
   loading?: boolean;
   error?: string;
@@ -182,7 +187,7 @@ export default function Home() {
   const [showPartsCost, setShowPartsCost] = useState(false);
   const [parts, setParts] = useState<Record<string, PartsState>>({});
   const [checkedParts, setCheckedParts] = useState<Set<string>>(new Set());
-  const [customParts, setCustomParts] = useState<Record<string, PartEstimate[]>>({});
+  const [customParts, setCustomParts] = useState<Record<string, CustomPart[]>>({});
   const [newPartName, setNewPartName] = useState("");
   const [newPartPrice, setNewPartPrice] = useState("");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
@@ -203,11 +208,11 @@ export default function Home() {
 
   function addCustomPart(listingUrl: string) {
     if (!newPartName.trim()) return;
-    const part: PartEstimate = { issue: "custom", part_name: newPartName.trim() };
+    const part: CustomPart = { issue: "custom", part_name: newPartName.trim(), id: crypto.randomUUID() };
     if (newPartPrice.trim()) part.price = newPartPrice.trim();
     setCustomParts((prev) => ({ ...prev, [listingUrl]: [...(prev[listingUrl] ?? []), part] }));
     // Added parts are what the user is actively building with, so include them by default.
-    setCheckedParts((prev) => new Set(prev).add(`${listingUrl}::${part.part_name}::custom`));
+    setCheckedParts((prev) => new Set(prev).add(`${listingUrl}::custom::${part.id}`));
     setNewPartName("");
     setNewPartPrice("");
   }
@@ -612,12 +617,13 @@ export default function Home() {
             .filter((i) => i.difficulty === "diy")
             .map((i) => i.issue);
           const partsResult = parts[l.url];
-          const allParts = [...(partsResult?.data ?? []), ...(customParts[l.url] ?? [])];
-          const partKey = (p: PartEstimate, isCustom: boolean) =>
-            `${l.url}::${p.part_name}${isCustom ? "::custom" : ""}`;
-          const checkedItems = allParts.filter((p, i) =>
-            checkedParts.has(partKey(p, i >= (partsResult?.data?.length ?? 0)))
-          );
+          const dataParts = partsResult?.data ?? [];
+          const allParts: (PartEstimate | CustomPart)[] = [...dataParts, ...(customParts[l.url] ?? [])];
+          // Data parts are keyed by their (stable, never-reordered) index; custom parts by
+          // their own id - part_name alone isn't unique (two parts can share a name).
+          const partKey = (p: PartEstimate | CustomPart, i: number) =>
+            i < dataParts.length ? `${l.url}::data::${i}` : `${l.url}::custom::${(p as CustomPart).id}`;
+          const checkedItems = allParts.filter((p, i) => checkedParts.has(partKey(p, i)));
           return (
           <div
             className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 py-10 sm:items-center"
@@ -843,8 +849,8 @@ export default function Home() {
                     {allParts.length > 0 && (
                       <ul className="mt-2 flex flex-col gap-1.5">
                         {allParts.map((p, i) => {
-                          const isCustom = i >= (partsResult?.data?.length ?? 0);
-                          const key = partKey(p, isCustom);
+                          const isCustom = i >= dataParts.length;
+                          const key = partKey(p, i);
                           return (
                             <li key={key} className="flex items-start gap-2 text-xs text-zinc-600 dark:text-zinc-400">
                               <input
@@ -869,7 +875,7 @@ export default function Home() {
                               </span>
                               {isCustom && (
                                 <button
-                                  onClick={() => removeCustomPart(l.url, i - (partsResult?.data?.length ?? 0))}
+                                  onClick={() => removeCustomPart(l.url, i - dataParts.length)}
                                   aria-label="Remove"
                                   className="shrink-0 text-zinc-400 hover:text-red-600 dark:text-zinc-500"
                                 >
