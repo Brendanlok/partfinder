@@ -168,6 +168,7 @@ const VERDICT_LABEL: Record<Verdict["verdict"], string> = {
 };
 
 const LAST_SEARCH_KEY = "partfinder:lastSearch";
+const SAVED_KEY = "partfinder:saved";
 
 export default function Home() {
   const [want, setWant] = useState("");
@@ -195,6 +196,10 @@ export default function Home() {
   // server) loads it - track failures so those listings fall back to the 🚗
   // placeholder instead of showing a broken-image icon.
   const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
+  // Saved listings persist across searches (unlike LAST_SEARCH_KEY, which only remembers
+  // the most recent one) - keyed by url so toggling is O(1) and re-saving is a no-op.
+  const [saved, setSaved] = useState<Record<string, Listing>>({});
+  const [showSaved, setShowSaved] = useState(false);
 
   // Escape closes the detail modal, same as clicking the backdrop or the × button.
   useEffect(() => {
@@ -242,6 +247,20 @@ export default function Home() {
     });
   }
 
+  function toggleSaved(listing: Listing) {
+    setSaved((prev) => {
+      const next = { ...prev };
+      if (next[listing.url]) delete next[listing.url];
+      else next[listing.url] = listing;
+      try {
+        localStorage.setItem(SAVED_KEY, JSON.stringify(next));
+      } catch {
+        // ponytail: storage full/unavailable, non-critical
+      }
+      return next;
+    });
+  }
+
   // Restore the last successful search on load, so a refresh/back-nav doesn't
   // lose results (and force a re-search that burns another API call).
   useEffect(() => {
@@ -251,6 +270,12 @@ export default function Home() {
       const { want: savedWant, listings: savedListings } = JSON.parse(saved);
       if (savedWant) setWant(savedWant);
       if (Array.isArray(savedListings)) setListings(savedListings);
+    } catch {
+      // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
+    }
+    try {
+      const rawSaved = localStorage.getItem(SAVED_KEY);
+      if (rawSaved) setSaved(JSON.parse(rawSaved));
     } catch {
       // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
     }
@@ -377,6 +402,7 @@ export default function Home() {
     setSortBy("relevance");
     setSourceFilter(new Set());
     setMaxPrice("");
+    setShowSaved(false);
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_SEARCH_FUNCTION_URL as string, {
         method: "POST",
@@ -401,10 +427,15 @@ export default function Home() {
     }
   }
 
-  const selectedListing = listings?.find((l) => l.url === selectedUrl) ?? null;
-  const availableSources = listings ? [...new Set(listings.map((l) => l.source))] : [];
-  const filteredListings = listings
-    ? listings.filter((l) => {
+  const savedCount = Object.keys(saved).length;
+  // Saved view replaces search results entirely (its own list, spanning past searches) -
+  // everything below (sort/filter/median/modal lookup) reads from this instead of `listings`.
+  const displayedListings: Listing[] | null = showSaved ? Object.values(saved) : listings;
+  const selectedListing =
+    listings?.find((l) => l.url === selectedUrl) ?? (selectedUrl ? saved[selectedUrl] : undefined) ?? null;
+  const availableSources = displayedListings ? [...new Set(displayedListings.map((l) => l.source))] : [];
+  const filteredListings = displayedListings
+    ? displayedListings.filter((l) => {
         if (sourceFilter.has(l.source)) return false;
         if (maxPrice) {
           const p = parsePrice(l.price);
@@ -434,10 +465,21 @@ export default function Home() {
         <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
           Partfinder
         </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Describe the car you want. We search mobile.de, AutoScout24, and
-          Kleinanzeigen for matches.
-        </p>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Describe the car you want. We search mobile.de, AutoScout24, and
+            Kleinanzeigen for matches.
+          </p>
+          {(savedCount > 0 || showSaved) && (
+            <button
+              type="button"
+              onClick={() => setShowSaved((s) => !s)}
+              className="shrink-0 text-sm font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+            >
+              {showSaved ? "← Back to search" : `★ Saved (${savedCount})`}
+            </button>
+          )}
+        </div>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
@@ -468,23 +510,25 @@ export default function Home() {
           </button>
         </div>
 
-        {loading && (
+        {loading && !showSaved && (
           <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
             {SEARCH_STATUS_MESSAGES[statusIndex]}
           </p>
         )}
 
-        {error && (
+        {error && !showSaved && (
           <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
 
-        {listings && listings.length === 0 && !error && (
+        {displayedListings && displayedListings.length === 0 && !error && (
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-            No matching listings found. Try a broader description.
+            {showSaved
+              ? "No saved listings yet. Tap ☆ on any listing to save it here."
+              : "No matching listings found. Try a broader description."}
           </p>
         )}
 
-        {listings && listings.length > 0 && (
+        {displayedListings && displayedListings.length > 0 && (
           <>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <select
@@ -547,9 +591,9 @@ export default function Home() {
               </p>
             )}
 
-            {sortedListings.length > 0 && sortedListings.length < listings.length && (
+            {sortedListings.length > 0 && sortedListings.length < displayedListings.length && (
               <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                Showing {sortedListings.length} of {listings.length} listings
+                Showing {sortedListings.length} of {displayedListings.length} listings
               </p>
             )}
 
@@ -558,7 +602,15 @@ export default function Home() {
               const price = parsePrice(l.price);
               const badge = median && price ? priceBadge(price, median) : null;
               return (
-              <li key={l.url}>
+              <li key={l.url} className="relative">
+                <button
+                  type="button"
+                  onClick={() => toggleSaved(l)}
+                  aria-label={saved[l.url] ? "Remove from saved" : "Save listing"}
+                  className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-base leading-none text-white hover:bg-black/70"
+                >
+                  {saved[l.url] ? "★" : "☆"}
+                </button>
                 <button
                   type="button"
                   onClick={() => setSelectedUrl(l.url)}
@@ -647,6 +699,14 @@ export default function Home() {
                     🚗
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => toggleSaved(l)}
+                  aria-label={saved[l.url] ? "Remove from saved" : "Save listing"}
+                  className="absolute right-14 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-lg leading-none text-white hover:bg-black/80"
+                >
+                  {saved[l.url] ? "★" : "☆"}
+                </button>
                 <button
                   type="button"
                   onClick={() => setSelectedUrl(null)}
