@@ -484,7 +484,15 @@ export default function Home() {
           {(savedCount > 0 || showSaved) && (
             <button
               type="button"
-              onClick={() => setShowSaved((s) => !s)}
+              onClick={() => {
+                // Saved is a separate curated list, not a continuation of the search -
+                // filters left over from a search (e.g. one source unchecked) could
+                // otherwise hide a saved listing with a confusing "no results" message.
+                setSourceFilter(new Set());
+                setMinPrice("");
+                setMaxPrice("");
+                setShowSaved((s) => !s);
+              }}
               className="shrink-0 text-sm font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
             >
               {showSaved ? "← Back to search" : `★ Saved (${savedCount})`}
