@@ -182,6 +182,7 @@ const VERDICT_LABEL: Record<Verdict["verdict"], string> = {
 
 const LAST_SEARCH_KEY = "partfinder:lastSearch";
 const SAVED_KEY = "partfinder:saved";
+const MAX_COMPARE = 3;
 
 export default function Home() {
   const [want, setWant] = useState("");
@@ -214,6 +215,10 @@ export default function Home() {
   // the most recent one) - keyed by url so toggling is O(1) and re-saving is a no-op.
   const [saved, setSaved] = useState<Record<string, Listing>>({});
   const [showSaved, setShowSaved] = useState(false);
+  // Compare only makes sense within the curated Saved list, not live search results -
+  // capped at 3 so the comparison strip stays readable on a phone screen.
+  const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
+  const [showCompare, setShowCompare] = useState(false);
 
   // Escape closes the detail modal, same as clicking the backdrop or the × button.
   useEffect(() => {
@@ -265,6 +270,15 @@ export default function Home() {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleCompare(url: string) {
+    setCompareSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else if (next.size < MAX_COMPARE) next.add(url);
       return next;
     });
   }
@@ -510,6 +524,8 @@ export default function Home() {
                 setSourceFilter(new Set());
                 setMinPrice("");
                 setMaxPrice("");
+                setCompareSet(new Set());
+                setShowCompare(false);
                 setShowSaved((s) => !s);
               }}
               className="shrink-0 text-sm font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
@@ -518,6 +534,25 @@ export default function Home() {
             </button>
           )}
         </div>
+
+        {showSaved && compareSet.size >= 2 && (
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowCompare(true)}
+              className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white dark:bg-white dark:text-black"
+            >
+              Compare selected ({compareSet.size})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompareSet(new Set())}
+              className="text-xs text-zinc-500 underline decoration-zinc-400 underline-offset-2 dark:text-zinc-400"
+            >
+              Clear
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
@@ -650,6 +685,21 @@ export default function Home() {
               const badge = median && price ? priceBadge(price, median) : null;
               return (
               <li key={l.url} className="relative">
+                {showSaved && (
+                  // Sibling of the modal-open button below, not nested inside it - an
+                  // <input> inside a <button> is invalid HTML and would also trigger
+                  // the modal to open on every click.
+                  <label className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-black/50 px-2 py-1 text-xs text-white">
+                    <input
+                      type="checkbox"
+                      checked={compareSet.has(l.url)}
+                      onChange={() => toggleCompare(l.url)}
+                      disabled={!compareSet.has(l.url) && compareSet.size >= MAX_COMPARE}
+                      className="h-3.5 w-3.5 rounded"
+                    />
+                    Compare
+                  </label>
+                )}
                 <button
                   type="button"
                   onClick={() => toggleSaved(l)}
@@ -1033,6 +1083,16 @@ export default function Home() {
                         </span>
                       )}
                     </p>
+                    {price !== null && dataParts.some((p) => p.price) && (
+                      // Uses the parts data already fetched (no new Tavily/Gemini call) -
+                      // asking price minus the found parts' real cost is a defensible
+                      // opening number, not a fabricated estimate.
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        💬 Suggested opening offer: €{Math.max(0, price - partsTotal(dataParts)).toLocaleString()}{" "}
+                        (asking price minus ~€{partsTotal(dataParts).toLocaleString()} in known parts costs -
+                        a starting point, not gospel)
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1040,6 +1100,107 @@ export default function Home() {
           </div>
           );
         })()}
+
+        {showCompare && (
+          <div
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 py-10 sm:items-center"
+            onClick={() => setShowCompare(false)}
+          >
+            <div
+              className="w-full max-w-4xl rounded-lg bg-white p-4 dark:bg-zinc-900 sm:p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-black dark:text-zinc-50">Compare listings</p>
+                <button
+                  type="button"
+                  onClick={() => setShowCompare(false)}
+                  aria-label="Close"
+                  className="text-zinc-400 hover:text-black dark:text-zinc-500 dark:hover:text-zinc-50"
+                >
+                  ✕
+                </button>
+              </div>
+              {/* Horizontal scroll, not a fixed-column table - keeps this usable at 375px
+                  without squeezing every cell unreadable. */}
+              <div className="mt-4 overflow-x-auto">
+                <div className="flex gap-4">
+                  {[...compareSet].map((url) => {
+                    const l = saved[url];
+                    if (!l) return null;
+                    const v = verdicts[url]?.data;
+                    const cmpParts = parts[url]?.data ?? [];
+                    const cmpPrice = parsePrice(l.price);
+                    const total =
+                      cmpParts.length > 0
+                        ? buildTotal(cmpPrice, cmpParts.filter((p) => p.price))
+                        : cmpPrice;
+                    return (
+                      <div
+                        key={url}
+                        className="w-48 shrink-0 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800 sm:w-56"
+                      >
+                        <div className="aspect-[4/3] w-full overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
+                          {l.image && !brokenImages.has(url) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={l.image} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-2xl text-zinc-300 dark:text-zinc-700">
+                              🚗
+                            </div>
+                          )}
+                        </div>
+                        <p className="mt-2 truncate font-medium text-black dark:text-zinc-50">{l.title}</p>
+                        <dl className="mt-1.5 space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+                          <div className="flex justify-between gap-2">
+                            <dt>Price</dt>
+                            <dd className="text-right">{l.price ?? "—"}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <dt>Year</dt>
+                            <dd className="text-right">{l.year ?? "—"}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <dt>Mileage</dt>
+                            <dd className="text-right">{l.mileage_km ? `${l.mileage_km} km` : "—"}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <dt>Source</dt>
+                            <dd className="text-right">{l.source}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <dt>Match</dt>
+                            <dd className="text-right">
+                              {typeof l.match_score === "number" ? `${l.match_score}%` : "—"}
+                            </dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <dt>Condition</dt>
+                            <dd className="text-right">{v ? VERDICT_LABEL[v.verdict] : "Not checked"}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2 font-medium text-black dark:text-zinc-50">
+                            <dt>Build total</dt>
+                            <dd className="text-right">{total !== null ? `€${total.toLocaleString()}` : "—"}</dd>
+                          </div>
+                        </dl>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCompare(false);
+                            setSelectedUrl(url);
+                          }}
+                          className="mt-2 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                        >
+                          Open details
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
