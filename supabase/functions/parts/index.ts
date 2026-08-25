@@ -197,8 +197,11 @@ async function handleParts(capped: string[], carDescription: string): Promise<Re
 
   // Same fabrication-proof check as search/index.ts's URL validation: a money-adjacent
   // link is worse to get wrong than a listing link, so only trust a url/price/title Gemini
-  // returned if that exact url actually came back in this issue's real search results.
-  const knownUrls = new Set(searches.flatMap((s) => s.results.map((r) => r.url)));
+  // returned if that exact url actually came back in *that issue's own* search results -
+  // a pooled set across all issues would let a valid-looking url from issue B's results
+  // slip through attached to issue A's part_name/price (same class of mixup the bestByUrl
+  // fix in search/index.ts closes for listings, just not caught here yet).
+  const resultsByIssue = new Map(searches.map((s) => [s.issue, s.results]));
   const MAX_FIELD_LEN = 60;
 
   // kfzteile24.de renders its prices client-side via JS (confirmed: fetching a real product
@@ -207,10 +210,11 @@ async function handleParts(capped: string[], carDescription: string): Promise<Re
   // most found prices should come from there. Either way, the shopping link always falls back
   // to Tavily's own top real result for that issue (deterministic, never LLM-touched) so the
   // checklist still points somewhere real and useful even on a no-price case.
-  const topResultByIssue = new Map(searches.map((s) => [s.issue, s.results[0] ?? null]));
   const parts = (parsed.parts ?? []).map((p: Record<string, unknown>) => {
     const clean = { ...p };
-    if (typeof clean.url !== "string" || !knownUrls.has(clean.url)) {
+    const issueResults = typeof clean.issue === "string" ? resultsByIssue.get(clean.issue) ?? [] : [];
+    const issueUrls = new Set(issueResults.map((r) => r.url));
+    if (typeof clean.url !== "string" || !issueUrls.has(clean.url)) {
       delete clean.url;
       delete clean.price;
       delete clean.source_title;
@@ -218,7 +222,7 @@ async function handleParts(capped: string[], carDescription: string): Promise<Re
     if (typeof clean.price === "string" && clean.price.length > MAX_FIELD_LEN) delete clean.price;
     if (typeof clean.source_title === "string" && clean.source_title.length > MAX_FIELD_LEN * 2) delete clean.source_title;
     if (!clean.url) {
-      const top = typeof clean.issue === "string" ? topResultByIssue.get(clean.issue) : null;
+      const top = issueResults[0] ?? null;
       if (top) {
         clean.url = top.url;
         clean.source_title = top.title;
