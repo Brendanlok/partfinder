@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { findDuplicates, duplicateSummary, type DuplicateMatch } from "@/lib/duplicates";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
 // lib (still non-standard/prefixed in some browsers), so type it loosely ourselves.
@@ -490,6 +491,10 @@ export default function Home() {
     : [];
   const sortedListings = sortListings(filteredListings, sortBy);
   const median = medianPrice(filteredListings);
+  // Duplicates are computed over everything fetched/saved, not just the filtered/sorted
+  // view - a source hidden by the filter checkboxes can still be the cheaper match worth
+  // surfacing on the listing that IS shown.
+  const duplicates = displayedListings ? findDuplicates(displayedListings) : {};
 
   // sourceFilter holds EXCLUDED sources (unchecked boxes), not included ones - so "exclude
   // nothing" (show all) and "exclude everything" (show none) are naturally distinct sets,
@@ -749,6 +754,11 @@ export default function Home() {
                       {l.mileage_km && <span>{l.mileage_km} km</span>}
                       <span className="text-zinc-400 dark:text-zinc-600">{l.source}</span>
                     </div>
+                    {duplicates[l.url] && (
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        Also on {duplicateSummary(duplicates[l.url])}
+                      </p>
+                    )}
                   </div>
                 </button>
               </li>
@@ -858,6 +868,25 @@ export default function Home() {
                     {l.source}
                   </span>
                 </div>
+
+                {duplicates[l.url] && (
+                  <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                    Also listed on{" "}
+                    {duplicates[l.url].map((m, i) => (
+                      <span key={m.url}>
+                        {i > 0 && ", "}
+                        <a
+                          href={m.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline decoration-zinc-400 underline-offset-2"
+                        >
+                          {m.source}{m.price ? ` (${m.price})` : ""}
+                        </a>
+                      </span>
+                    ))}
+                  </p>
+                )}
 
                 {!verdicts[l.url] && (
                   <button
