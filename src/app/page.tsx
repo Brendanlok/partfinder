@@ -220,6 +220,8 @@ export default function Home() {
   // capped at 3 so the comparison strip stays readable on a phone screen.
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
   const [showCompare, setShowCompare] = useState(false);
+  // Brief "Copied!" confirmation after sharing a search link - resets itself, no click away needed.
+  const [copied, setCopied] = useState(false);
 
   // Escape closes the detail modal, same as clicking the backdrop or the × button.
   useEffect(() => {
@@ -284,6 +286,21 @@ export default function Home() {
     });
   }
 
+  // Puts the current search text in the URL (?q=...) and copies it - a link a friend
+  // opens loads straight into the search box (see the load-restore effect above),
+  // no server round-trip or saved-search state needed for that to work.
+  async function shareSearch() {
+    const url = new URL(window.location.href);
+    url.search = want.trim() ? `?q=${encodeURIComponent(want.trim())}` : "";
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ponytail: clipboard blocked/unavailable (e.g. no HTTPS, permission denied), non-critical
+    }
+  }
+
   function toggleSaved(listing: Listing) {
     setSaved((prev) => {
       const next = { ...prev };
@@ -299,16 +316,25 @@ export default function Home() {
   }
 
   // Restore the last successful search on load, so a refresh/back-nav doesn't
-  // lose results (and force a re-search that burns another API call).
+  // lose results (and force a re-search that burns another API call). A shared
+  // search link (?q=...) takes priority over that - it's an explicit request to
+  // load a different search, not a return visit to keep browsing the last one.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(LAST_SEARCH_KEY);
-      if (!saved) return;
-      const { want: savedWant, listings: savedListings } = JSON.parse(saved);
-      if (savedWant) setWant(savedWant);
-      if (Array.isArray(savedListings)) setListings(savedListings);
-    } catch {
-      // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
+    const sharedWant = new URLSearchParams(window.location.search).get("q");
+    if (sharedWant) {
+      setWant(sharedWant);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else {
+      try {
+        const saved = localStorage.getItem(LAST_SEARCH_KEY);
+        if (saved) {
+          const { want: savedWant, listings: savedListings } = JSON.parse(saved);
+          if (savedWant) setWant(savedWant);
+          if (Array.isArray(savedListings)) setListings(savedListings);
+        }
+      } catch {
+        // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
+      }
     }
     try {
       const rawSaved = localStorage.getItem(SAVED_KEY);
@@ -659,6 +685,15 @@ export default function Home() {
                 />
                 + Parts &amp; build cost
               </label>
+              {!showSaved && (
+                <button
+                  type="button"
+                  onClick={shareSearch}
+                  className="text-sm font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                >
+                  {copied ? "Copied!" : "🔗 Share search"}
+                </button>
+              )}
             </div>
 
             {sortedListings.length === 0 && (
