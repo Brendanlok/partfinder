@@ -417,7 +417,10 @@ export default function Home() {
   }
 
   async function search() {
-    if (!want.trim()) return;
+    // The Search button is `disabled` while loading, but Enter-to-search bypasses
+    // that guard - without this, a fast double-Enter fires two concurrent Tavily
+    // searches, burning quota that's genuinely scarce (1,000/month, shared with real users).
+    if (loading || !want.trim()) return;
     setLoading(true);
     setError("");
     setListings(null);
