@@ -36,6 +36,11 @@ type Listing = {
   match_score?: number;
   match_tags?: string[];
   image?: string;
+  // The search text that produced this listing - saved listings persist across searches
+  // (see `saved` state), so by the time a user opens an old saved listing the live `want`
+  // input can already describe a completely different car. Tagged once at search time so
+  // condition-check/tutorial/parts calls describe the right car, not whatever's in the box.
+  want?: string;
 };
 
 function matchColor(score: number): string {
@@ -348,7 +353,7 @@ export default function Home() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ url: listing.url, want }),
+        body: JSON.stringify({ url: listing.url, want: listing.want ?? want }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Couldn't check this listing.");
@@ -364,7 +369,7 @@ export default function Home() {
   // Cache key is listing URL + issue text, not issue text alone - two different cars can
   // surface the same issue wording (seen live: identical Gemini phrasing for unrelated
   // listings), and issue text alone would show one listing's tutorial under another's.
-  async function fetchTutorial(listingUrl: string, issue: string) {
+  async function fetchTutorial(listingUrl: string, issue: string, wantContext: string) {
     const key = `${listingUrl}::${issue}`;
     setTutorials((t) => ({ ...t, [key]: { loading: true } }));
     try {
@@ -374,7 +379,7 @@ export default function Home() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ issue, want }),
+        body: JSON.stringify({ issue, want: wantContext }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Couldn't load repair steps.");
@@ -389,7 +394,7 @@ export default function Home() {
 
   // One click estimates all of a listing's DIY issues at once (capped server-side) rather
   // than one call per issue - keeps this to a bounded, user-initiated Tavily/Gemini cost.
-  async function fetchParts(listingUrl: string, issues: string[]) {
+  async function fetchParts(listingUrl: string, issues: string[], wantContext: string) {
     setParts((p) => ({ ...p, [listingUrl]: { loading: true } }));
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_PARTS_FUNCTION_URL as string, {
@@ -398,7 +403,7 @@ export default function Home() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ issues, want }),
+        body: JSON.stringify({ issues, want: wantContext }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Couldn't estimate parts cost.");
@@ -432,9 +437,12 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong.");
-      setListings(data.listings);
+      const taggedListings = Array.isArray(data.listings)
+        ? data.listings.map((l: Listing) => ({ ...l, want }))
+        : data.listings;
+      setListings(taggedListings);
       try {
-        localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify({ want, listings: data.listings }));
+        localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify({ want, listings: taggedListings }));
       } catch {
         // ponytail: storage full/unavailable, non-critical
       }
@@ -857,7 +865,7 @@ export default function Home() {
                               <>
                                 {!tutorials[tutorialKey] && (
                                   <button
-                                    onClick={() => fetchTutorial(l.url, item.issue)}
+                                    onClick={() => fetchTutorial(l.url, item.issue, l.want ?? want)}
                                     className="ml-2 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                                   >
                                     How to fix
@@ -918,7 +926,7 @@ export default function Home() {
                     {showPartsCost && diyIssues.length > 0 && !partsResult && (
                       <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
                         <button
-                          onClick={() => fetchParts(l.url, diyIssues)}
+                          onClick={() => fetchParts(l.url, diyIssues, l.want ?? want)}
                           className="text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                         >
                           Find parts needed
