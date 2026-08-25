@@ -220,6 +220,14 @@ export default function Home() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedUrl]);
 
+  // The "add a part" draft fields are global state, not per-listing - without this, a
+  // half-typed part name/price for one car's modal would still be sitting in the inputs
+  // when a different listing's modal opens next.
+  useEffect(() => {
+    setNewPartName("");
+    setNewPartPrice("");
+  }, [selectedUrl]);
+
   function addCustomPart(listingUrl: string) {
     if (!newPartName.trim()) return;
     const part: CustomPart = { issue: "custom", part_name: newPartName.trim(), id: crypto.randomUUID() };
