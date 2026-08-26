@@ -13,6 +13,17 @@ function isSingleListingUrl(url: string): boolean {
   return false;
 }
 
+// The listing's own URL already tells us which site it's from - Gemini's freeform
+// "source" field can drift in capitalization/wording between listings of the same
+// site (confirmed risk, not yet observed live), which would silently split one site
+// into two source-filter checkboxes and break same-site duplicate detection
+// (isProbablySameCar requires source strings to match exactly). Deterministic beats
+// LLM-guessed for something we already know.
+function sourceFromUrl(url: string): string {
+  const host = new URL(url).hostname;
+  return LISTING_SITES.find((site) => host.endsWith(site)) ?? host;
+}
+
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -292,8 +303,10 @@ async function handleSearch(want: string): Promise<Response> {
     }
   }
   const dedupedListings = [...bestByUrl.values()].map((l) => {
-    const image = typeof l.url === "string" ? imageByUrl.get(l.url) : null;
-    return image ? { ...l, image } : l;
+    const url = typeof l.url === "string" ? l.url : null;
+    const image = url ? imageByUrl.get(url) : null;
+    const source = url ? sourceFromUrl(url) : l.source;
+    return { ...l, ...(image ? { image } : {}), source };
   });
 
   return Response.json({ listings: dedupedListings }, { headers: corsHeaders });

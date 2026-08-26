@@ -848,7 +848,7 @@ export default function Home() {
 
             {sortedListings.length > 0 && sortedListings.length < displayedListings.length && (
               <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                Showing {sortedListings.length} of {displayedListings.length} listings
+                {t.showingOf(sortedListings.length, displayedListings.length)}
               </p>
             )}
 

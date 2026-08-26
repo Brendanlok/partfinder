@@ -34,6 +34,7 @@ type Dict = {
   copied: string;
   noResultsFilters: string;
   clearFilters: string;
+  showingOf: (shown: number, total: number) => string;
 };
 
 export const translations: Record<Lang, Dict> = {
@@ -77,6 +78,7 @@ export const translations: Record<Lang, Dict> = {
     copied: "Copied!",
     noResultsFilters: "No results match these filters.",
     clearFilters: "Clear filters",
+    showingOf: (shown, total) => `Showing ${shown} of ${total} listings`,
   },
   de: {
     subtitle: "Beschreibe das Auto, das du suchst. Wir durchsuchen mobile.de, AutoScout24 und Kleinanzeigen nach passenden Angeboten.",
@@ -118,5 +120,6 @@ export const translations: Record<Lang, Dict> = {
     copied: "Kopiert!",
     noResultsFilters: "Keine Ergebnisse mit diesen Filtern.",
     clearFilters: "Filter zurücksetzen",
+    showingOf: (shown, total) => `${shown} von ${total} Anzeigen`,
   },
 };
