@@ -249,6 +249,8 @@ export default function Home() {
   const [showCompare, setShowCompare] = useState(false);
   // Brief "Copied!" confirmation after sharing a search link - resets itself, no click away needed.
   const [copied, setCopied] = useState(false);
+  // Same pattern for the build-report "Copy summary" button in the detail modal.
+  const [summaryCopied, setSummaryCopied] = useState(false);
 
   // Escape closes the detail modal, same as clicking the backdrop or the × button.
   useEffect(() => {
@@ -328,6 +330,16 @@ export default function Home() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // ponytail: clipboard blocked/unavailable (e.g. no HTTPS, permission denied), non-critical
+    }
+  }
+
+  async function copyBuildSummary(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setSummaryCopied(true);
+      setTimeout(() => setSummaryCopied(false), 2000);
+    } catch {
+      // ponytail: clipboard blocked/unavailable, non-critical
     }
   }
 
@@ -1242,6 +1254,34 @@ export default function Home() {
                             Rough math only, not a loan offer - your bank's actual rate and fees will differ.
                           </p>
                         </div>
+                      );
+                    })()}
+
+                    {(() => {
+                      const data = verdicts[l.url]?.data;
+                      const total = buildTotal(price, checkedItems);
+                      const lines = [
+                        l.title,
+                        [l.price, l.year, l.mileage_km ? `${l.mileage_km} km` : null].filter(Boolean).join(" · "),
+                        data ? `Condition: ${VERDICT_LABEL[data.verdict]} — ${data.condition_summary}` : null,
+                        checkedItems.length > 0
+                          ? `Checked parts:\n${checkedItems
+                              .map((p) => `- ${p.part_name}${p.price ? ` (${p.price})` : ""}`)
+                              .join("\n")}`
+                          : null,
+                        `Build total: €${total.toLocaleString()}`,
+                        price !== null && dataParts.some((p) => p.price)
+                          ? `Suggested opening offer: €${Math.max(0, price - partsTotal(dataParts)).toLocaleString()}`
+                          : null,
+                        l.url,
+                      ].filter(Boolean);
+                      return (
+                        <button
+                          onClick={() => copyBuildSummary(lines.join("\n\n"))}
+                          className="mt-3 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                        >
+                          {summaryCopied ? "Copied!" : "📋 Copy summary"}
+                        </button>
                       );
                     })()}
                   </div>
