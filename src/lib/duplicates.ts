@@ -9,6 +9,7 @@ export type DupListing = {
   price?: string;
   year?: string;
   mileage_km?: string;
+  match_score?: number;
 };
 
 export type DuplicateMatch = { url: string; source: string; price?: string };
@@ -76,6 +77,59 @@ export function duplicateSummary(matches: DuplicateMatch[]): string {
   const [first, ...rest] = sorted;
   const priced = first.price ? ` for ${first.price}` : "";
   return rest.length > 0 ? `${first.source}${priced} +${rest.length} more` : `${first.source}${priced}`;
+}
+
+// Collapses each cross-posted cluster (a-dupes-b-dupes-c, transitively) down to its
+// single best listing - highest match_score, ties broken by lowest price, then by
+// original order (stable) so re-running with identical inputs never reshuffles output.
+// `duplicatesByUrl` is the caller's already-computed findDuplicates() result, not
+// recomputed here, so this stays a plain filter with no extra comparisons.
+export function pickRepresentatives<T extends DupListing>(
+  listings: T[],
+  duplicatesByUrl: Record<string, DuplicateMatch[]>
+): T[] {
+  const parent = new Map<string, string>();
+  function find(x: string): string {
+    if (!parent.has(x)) parent.set(x, x);
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    parent.set(x, root); // path compression
+    return root;
+  }
+  function union(a: string, b: string) {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  }
+  for (const [url, matches] of Object.entries(duplicatesByUrl)) {
+    for (const m of matches) union(url, m.url);
+  }
+
+  const byCluster = new Map<string, T[]>();
+  for (const l of listings) {
+    const root = duplicatesByUrl[l.url] ? find(l.url) : l.url;
+    const group = byCluster.get(root);
+    if (group) group.push(l);
+    else byCluster.set(root, [l]);
+  }
+
+  const keepUrls = new Set<string>();
+  for (const group of byCluster.values()) {
+    let best = group[0];
+    for (const candidate of group.slice(1)) {
+      const bestScore = best.match_score ?? -1;
+      const candidateScore = candidate.match_score ?? -1;
+      if (candidateScore > bestScore) {
+        best = candidate;
+      } else if (candidateScore === bestScore) {
+        const bestPrice = parsePrice(best.price) ?? Infinity;
+        const candidatePrice = parsePrice(candidate.price) ?? Infinity;
+        if (candidatePrice < bestPrice) best = candidate;
+      }
+    }
+    keepUrls.add(best.url);
+  }
+  return listings.filter((l) => keepUrls.has(l.url));
 }
 
 // ponytail: O(n^2) title comparisons - fine at search-result scale (tens of listings,

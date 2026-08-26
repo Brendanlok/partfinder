@@ -2,7 +2,7 @@
 // Run: node --experimental-strip-types src/lib/duplicates.test.ts
 
 import assert from "node:assert";
-import { findDuplicates, duplicateSummary, isProbablySameCar } from "./duplicates.ts";
+import { findDuplicates, duplicateSummary, isProbablySameCar, pickRepresentatives } from "./duplicates.ts";
 
 // Same car, cross-posted with different title wording/casing - should match.
 assert.strictEqual(
@@ -56,5 +56,24 @@ assert.strictEqual(dupes["a"]?.length, 1);
 assert.strictEqual(dupes["a"][0].url, "b");
 assert.strictEqual(dupes["c"], undefined, "unrelated listing should have no matches");
 assert.strictEqual(duplicateSummary(dupes["a"]), "AutoScout24 for €18,900");
+
+// pickRepresentatives keeps the best-scoring listing per cross-posted cluster and
+// leaves an unrelated listing alone.
+const scored = [
+  { url: "a", title: "BMW E46 M3 Coupe", source: "mobile.de", price: "€19,500", year: "2004", mileage_km: "120000", match_score: 70 },
+  { url: "b", title: "BMW E46 M3 Coupe", source: "AutoScout24", price: "€18,900", year: "2004", mileage_km: "120300", match_score: 90 },
+  { url: "c", title: "VW Golf GTI", source: "Kleinanzeigen", price: "€12,000", year: "2018", mileage_km: "60000", match_score: 50 },
+];
+const scoredDupes = findDuplicates(scored);
+const kept = pickRepresentatives(scored, scoredDupes);
+assert.deepStrictEqual(kept.map((l) => l.url), ["b", "c"], "higher match_score should win the cluster, unrelated listing untouched");
+
+// Tie on match_score falls back to lowest price.
+const tied = [
+  { url: "x", title: "BMW E46 M3 Coupe", source: "mobile.de", price: "€19,500", year: "2004", mileage_km: "120000", match_score: 80 },
+  { url: "y", title: "BMW E46 M3 Coupe", source: "AutoScout24", price: "€18,900", year: "2004", mileage_km: "120300", match_score: 80 },
+];
+const tiedKept = pickRepresentatives(tied, findDuplicates(tied));
+assert.deepStrictEqual(tiedKept.map((l) => l.url), ["y"], "tied match_score should fall back to lowest price");
 
 console.log("duplicates.test.ts: all checks passed");

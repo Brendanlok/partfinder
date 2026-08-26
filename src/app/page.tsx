@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { findDuplicates, duplicateSummary, type DuplicateMatch } from "@/lib/duplicates";
+import { findDuplicates, duplicateSummary, pickRepresentatives, type DuplicateMatch } from "@/lib/duplicates";
 import { monthlyPayment } from "@/lib/finance";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
@@ -228,6 +228,9 @@ export default function Home() {
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
+  // Off by default - collapsing cross-posted listings is a judgment call (which listing
+  // "wins") that not every user wants made for them, so it's an opt-in view, not the default.
+  const [hideDuplicates, setHideDuplicates] = useState(false);
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -564,12 +567,18 @@ export default function Home() {
         return true;
       })
     : [];
-  const sortedListings = sortListings(filteredListings, sortBy);
+  const sortedAndFilteredListings = sortListings(filteredListings, sortBy);
   const median = medianPrice(filteredListings);
   // Duplicates are computed over everything fetched/saved, not just the filtered/sorted
   // view - a source hidden by the filter checkboxes can still be the cheaper match worth
   // surfacing on the listing that IS shown.
   const duplicates = displayedListings ? findDuplicates(displayedListings) : {};
+  // Applied last, after sort/filter - collapses each cross-posted cluster down to its one
+  // best-match_score listing (see pickRepresentatives), so "Also on X" still tells the user
+  // about the sibling even though its own card no longer takes up a grid slot.
+  const sortedListings = hideDuplicates
+    ? pickRepresentatives(sortedAndFilteredListings, duplicates)
+    : sortedAndFilteredListings;
 
   // sourceFilter holds EXCLUDED sources (unchecked boxes), not included ones - so "exclude
   // nothing" (show all) and "exclude everything" (show none) are naturally distinct sets,
@@ -752,6 +761,20 @@ export default function Home() {
                 />
                 + Parts &amp; build cost
               </label>
+              {Object.keys(duplicates).length > 0 && (
+                <label
+                  className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400"
+                  title="Show one card per car, not one per site it's cross-posted on"
+                >
+                  <input
+                    type="checkbox"
+                    checked={hideDuplicates}
+                    onChange={(e) => setHideDuplicates(e.target.checked)}
+                    className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                  />
+                  Hide duplicates
+                </label>
+              )}
               {!showSaved && (
                 <button
                   type="button"
