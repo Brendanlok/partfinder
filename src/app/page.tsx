@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { findDuplicates, duplicateSummary, type DuplicateMatch } from "@/lib/duplicates";
+import { monthlyPayment } from "@/lib/finance";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
 // lib (still non-standard/prefixed in some browsers), so type it loosely ourselves.
@@ -207,6 +208,9 @@ export default function Home() {
   const [customParts, setCustomParts] = useState<Record<string, CustomPart[]>>({});
   const [newPartName, setNewPartName] = useState("");
   const [newPartPrice, setNewPartPrice] = useState("");
+  const [financeDown, setFinanceDown] = useState("");
+  const [financeApr, setFinanceApr] = useState("6.9");
+  const [financeTerm, setFinanceTerm] = useState("48");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   // A scraped og:image can 404 or hotlink-block by the time the browser (not our
   // server) loads it - track failures so those listings fall back to the 🚗
@@ -239,6 +243,9 @@ export default function Home() {
   useEffect(() => {
     setNewPartName("");
     setNewPartPrice("");
+    setFinanceDown("");
+    setFinanceApr("6.9");
+    setFinanceTerm("48");
   }, [selectedUrl]);
 
   function addCustomPart(listingUrl: string) {
@@ -1165,6 +1172,51 @@ export default function Home() {
                         a starting point, not gospel)
                       </p>
                     )}
+
+                    {(() => {
+                      const total = buildTotal(price, checkedItems);
+                      const financed = Math.max(0, total - (Number(financeDown) || 0));
+                      const monthly = monthlyPayment(financed, Number(financeApr) || 0, Number(financeTerm) || 0);
+                      return (
+                        <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                          <p className="text-xs font-medium text-black dark:text-zinc-50">Financing estimate</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              value={financeDown}
+                              onChange={(e) => setFinanceDown(e.target.value)}
+                              placeholder="Down payment €"
+                              className="w-32 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                            />
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              value={financeApr}
+                              onChange={(e) => setFinanceApr(e.target.value)}
+                              placeholder="APR %"
+                              className="w-20 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                            />
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              value={financeTerm}
+                              onChange={(e) => setFinanceTerm(e.target.value)}
+                              placeholder="Term (months)"
+                              className="w-28 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                            />
+                          </div>
+                          <p className="mt-2 text-sm font-medium text-black dark:text-zinc-50">
+                            {monthly !== null
+                              ? `≈ €${Math.round(monthly).toLocaleString()}/mo`
+                              : "Enter a down payment less than the build total"}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-600">
+                            Rough math only, not a loan offer - your bank's actual rate and fees will differ.
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
