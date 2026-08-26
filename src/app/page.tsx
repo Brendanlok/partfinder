@@ -27,6 +27,13 @@ const SEARCH_STATUS_MESSAGES = [
   "Almost there…",
 ];
 
+// Tappable examples on the first-load empty state, to show what a good query looks like.
+const EXAMPLE_SEARCHES = [
+  "BMW E46 M3, manual, under 20k",
+  "VW Golf GTI Mk7, under 80k km",
+  "Diesel estate, good condition, under 15k",
+];
+
 type Listing = {
   title: string;
   url: string;
@@ -655,6 +662,24 @@ export default function Home() {
             {loading ? "Searching…" : "Search"}
           </button>
         </div>
+
+        {!showSaved && !displayedListings && !loading && (
+          // First-load empty state only (never searched yet) - lowers the barrier for a
+          // first-time visitor. Fills the box rather than auto-searching, so a stray tap
+          // doesn't spend a real Tavily search - same reasoning as the shared-search-link restore.
+          <div className="mt-4 flex flex-wrap gap-2">
+            {EXAMPLE_SEARCHES.map((ex) => (
+              <button
+                key={ex}
+                type="button"
+                onClick={() => setWant(ex)}
+                className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-500 hover:text-black dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
+        )}
 
         {loading && !showSaved && (
           <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
