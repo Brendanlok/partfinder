@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { findDuplicates, duplicateSummary, pickRepresentatives, type DuplicateMatch } from "@/lib/duplicates";
 import { monthlyPayment } from "@/lib/finance";
+import { draftNegotiationMessage } from "@/lib/negotiation";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
 // lib (still non-standard/prefixed in some browsers), so type it loosely ourselves.
@@ -261,6 +262,10 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   // Same pattern for the build-report "Copy summary" button in the detail modal.
   const [summaryCopied, setSummaryCopied] = useState(false);
+  // Negotiation draft is per-listing (which one's expanded) - Set, not a single bool,
+  // same reasoning as expandedVerdicts.
+  const [draftOpen, setDraftOpen] = useState<Set<string>>(new Set());
+  const [draftCopied, setDraftCopied] = useState(false);
 
   // Escape closes the detail modal, same as clicking the backdrop or the × button.
   useEffect(() => {
@@ -348,6 +353,25 @@ export default function Home() {
       await navigator.clipboard.writeText(text);
       setSummaryCopied(true);
       setTimeout(() => setSummaryCopied(false), 2000);
+    } catch {
+      // ponytail: clipboard blocked/unavailable, non-critical
+    }
+  }
+
+  function toggleDraftOpen(url: string) {
+    setDraftOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  }
+
+  async function copyDraft(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setDraftCopied(true);
+      setTimeout(() => setDraftCopied(false), 2000);
     } catch {
       // ponytail: clipboard blocked/unavailable, non-critical
     }
@@ -1258,6 +1282,41 @@ export default function Home() {
                         (asking price minus ~€{partsTotal(dataParts).toLocaleString()} in known parts costs -
                         a starting point, not gospel)
                       </p>
+                    )}
+                    {price !== null && dataParts.some((p) => p.price) && (
+                      // Same gate as the offer line above - only worth drafting a message once
+                      // there's an actual number to propose. Plain template, not a Gemini call,
+                      // so this stays zero ongoing API cost.
+                      <div className="mt-1">
+                        <button
+                          onClick={() => toggleDraftOpen(l.url)}
+                          className="text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                        >
+                          ✉️ Draft message to seller
+                        </button>
+                        {draftOpen.has(l.url) &&
+                          (() => {
+                            const offer = Math.max(0, price - partsTotal(dataParts));
+                            const issues = (verdicts[l.url]?.data?.issues ?? []).map((i) => i.issue);
+                            const message = draftNegotiationMessage({ title: l.title, askingPrice: price, offer, issues });
+                            return (
+                              <div className="mt-2">
+                                <textarea
+                                  readOnly
+                                  value={message}
+                                  rows={5}
+                                  className="w-full rounded-lg border border-zinc-300 bg-white p-2 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                                />
+                                <button
+                                  onClick={() => copyDraft(message)}
+                                  className="mt-1 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                                >
+                                  {draftCopied ? "Copied!" : "📋 Copy message"}
+                                </button>
+                              </div>
+                            );
+                          })()}
+                      </div>
                     )}
 
                     {(() => {
