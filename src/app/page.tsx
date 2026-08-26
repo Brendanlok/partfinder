@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { findDuplicates, duplicateSummary, pickRepresentatives, type DuplicateMatch } from "@/lib/duplicates";
 import { monthlyPayment } from "@/lib/finance";
 import { draftNegotiationMessage } from "@/lib/negotiation";
+import { translations, LANG_KEY, type Lang } from "@/lib/translations";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
 // lib (still non-standard/prefixed in some browsers), so type it loosely ourselves.
@@ -21,19 +22,6 @@ type SpeechRecognitionWindow = Window & {
   SpeechRecognition?: new () => SpeechRecognitionLike;
   webkitSpeechRecognition?: new () => SpeechRecognitionLike;
 };
-
-const SEARCH_STATUS_MESSAGES = [
-  "Searching mobile.de, AutoScout24 & Kleinanzeigen…",
-  "Reading listings…",
-  "Almost there…",
-];
-
-// Tappable examples on the first-load empty state, to show what a good query looks like.
-const EXAMPLE_SEARCHES = [
-  "BMW E46 M3, manual, under 20k",
-  "VW Golf GTI Mk7, under 80k km",
-  "Diesel estate, good condition, under 15k",
-];
 
 type Listing = {
   title: string;
@@ -218,6 +206,10 @@ const SAVED_KEY = "partfinder:saved";
 const MAX_COMPARE = 3;
 
 export default function Home() {
+  // Lighter first-pass translation (main search screen only) - defaults to English,
+  // sticks to whatever the user last picked via the EN/DE toggle.
+  const [lang, setLang] = useState<Lang>("en");
+  const t = translations[lang];
   const [want, setWant] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -396,6 +388,27 @@ export default function Home() {
   // search link (?q=...) takes priority over that - it's an explicit request to
   // load a different search, not a return visit to keep browsing the last one.
   useEffect(() => {
+    try {
+      const storedLang = localStorage.getItem(LANG_KEY);
+      if (storedLang === "en" || storedLang === "de") setLang(storedLang);
+    } catch {
+      // ponytail: localStorage unavailable, just stays on the "en" default
+    }
+  }, []);
+
+  function toggleLang() {
+    setLang((prev) => {
+      const next = prev === "en" ? "de" : "en";
+      try {
+        localStorage.setItem(LANG_KEY, next);
+      } catch {
+        // ponytail: localStorage unavailable, non-critical - just won't stick on reload
+      }
+      return next;
+    });
+  }
+
+  useEffect(() => {
     const sharedWant = new URLSearchParams(window.location.search).get("q");
     if (sharedWant) {
       setWant(sharedWant);
@@ -424,7 +437,7 @@ export default function Home() {
     if (!loading) return;
     setStatusIndex(0);
     const id = setInterval(
-      () => setStatusIndex((i) => Math.min(i + 1, SEARCH_STATUS_MESSAGES.length - 1)),
+      () => setStatusIndex((i) => Math.min(i + 1, t.statusMessages.length - 1)),
       8000
     );
     return () => clearInterval(id);
@@ -619,13 +632,21 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black px-4 py-10 sm:py-16">
       <main className="mx-auto max-w-6xl">
-        <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
-          Partfinder
-        </h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
+            Partfinder
+          </h1>
+          <button
+            type="button"
+            onClick={toggleLang}
+            className="shrink-0 rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-zinc-500 hover:text-black dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
+          >
+            {lang === "en" ? "DE" : "EN"}
+          </button>
+        </div>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Describe the car you want. We search mobile.de, AutoScout24, and
-            Kleinanzeigen for matches.
+            {t.subtitle}
           </p>
           {(savedCount > 0 || showSaved) && (
             <button
@@ -643,7 +664,7 @@ export default function Home() {
               }}
               className="shrink-0 text-sm font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
             >
-              {showSaved ? "← Back to search" : `★ Saved (${savedCount})`}
+              {showSaved ? t.backToSearch : t.saved(savedCount)}
             </button>
           )}
         </div>
@@ -655,14 +676,14 @@ export default function Home() {
               onClick={() => setShowCompare(true)}
               className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white dark:bg-white dark:text-black"
             >
-              Compare selected ({compareSet.size})
+              {t.compareSelected(compareSet.size)}
             </button>
             <button
               type="button"
               onClick={() => setCompareSet(new Set())}
               className="text-xs text-zinc-500 underline decoration-zinc-400 underline-offset-2 dark:text-zinc-400"
             >
-              Clear
+              {t.clear}
             </button>
           </div>
         )}
@@ -673,14 +694,14 @@ export default function Home() {
               value={want}
               onChange={(e) => setWant(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()}
-              placeholder="e.g. BMW E46 M3, manual, under 20k, good condition"
+              placeholder={t.searchPlaceholder}
               className={`w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 ${speechSupported ? "pr-11" : ""}`}
             />
             {speechSupported && (
               <button
                 type="button"
                 onClick={toggleListen}
-                aria-label={listening ? "Stop voice input" : "Speak your search"}
+                aria-label={listening ? t.stopVoiceInput : t.speakYourSearch}
                 className={`absolute right-3 top-1/2 -translate-y-1/2 ${listening ? "text-red-500" : "text-zinc-400 hover:text-black dark:text-zinc-500 dark:hover:text-zinc-50"}`}
               >
                 {listening ? "⏹" : "🎤"}
@@ -692,7 +713,7 @@ export default function Home() {
             disabled={loading || !want.trim()}
             className="w-full rounded-lg bg-black px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black sm:w-auto"
           >
-            {loading ? "Searching…" : "Search"}
+            {loading ? t.searching : t.search}
           </button>
         </div>
 
@@ -701,7 +722,7 @@ export default function Home() {
           // first-time visitor. Fills the box rather than auto-searching, so a stray tap
           // doesn't spend a real Tavily search - same reasoning as the shared-search-link restore.
           <div className="mt-4 flex flex-wrap gap-2">
-            {EXAMPLE_SEARCHES.map((ex) => (
+            {t.exampleSearches.map((ex) => (
               <button
                 key={ex}
                 type="button"
@@ -716,7 +737,7 @@ export default function Home() {
 
         {loading && !showSaved && (
           <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
-            {SEARCH_STATUS_MESSAGES[statusIndex]}
+            {t.statusMessages[statusIndex]}
           </p>
         )}
 
@@ -726,9 +747,7 @@ export default function Home() {
 
         {displayedListings && displayedListings.length === 0 && !error && (
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-            {showSaved
-              ? "No saved listings yet. Tap ☆ on any listing to save it here."
-              : "No matching listings found. Try a broader description."}
+            {showSaved ? t.noSavedListings : t.noMatchingListings}
           </p>
         )}
 
@@ -742,7 +761,7 @@ export default function Home() {
               >
                 {(Object.keys(SORT_LABEL) as SortOption[]).map((opt) => (
                   <option key={opt} value={opt}>
-                    {SORT_LABEL[opt]}
+                    {t.sortLabels[opt]}
                   </option>
                 ))}
               </select>
@@ -751,7 +770,7 @@ export default function Home() {
                 inputMode="numeric"
                 value={minPrice}
                 onChange={(e) => setMinPrice(e.target.value)}
-                placeholder="Min price €"
+                placeholder={t.minPricePlaceholder}
                 className="w-28 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               />
               <input
@@ -759,7 +778,7 @@ export default function Home() {
                 inputMode="numeric"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(e.target.value)}
-                placeholder="Max price €"
+                placeholder={t.maxPricePlaceholder}
                 className="w-28 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               />
               {availableSources.map((s) => (
@@ -775,7 +794,7 @@ export default function Home() {
               ))}
               <label
                 className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400"
-                title="Ad price only, or also look up parts to fix up the car and build a shopping list"
+                title={t.partsBuildCostTitle}
               >
                 <input
                   type="checkbox"
@@ -783,12 +802,12 @@ export default function Home() {
                   onChange={(e) => setShowPartsCost(e.target.checked)}
                   className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
                 />
-                + Parts &amp; build cost
+                {t.partsBuildCost}
               </label>
               {Object.keys(duplicates).length > 0 && (
                 <label
                   className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400"
-                  title="Show one card per car, not one per site it's cross-posted on"
+                  title={t.hideDuplicatesTitle}
                 >
                   <input
                     type="checkbox"
@@ -796,7 +815,7 @@ export default function Home() {
                     onChange={(e) => setHideDuplicates(e.target.checked)}
                     className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
                   />
-                  Hide duplicates
+                  {t.hideDuplicates}
                 </label>
               )}
               {!showSaved && (
@@ -805,14 +824,14 @@ export default function Home() {
                   onClick={shareSearch}
                   className="text-sm font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                 >
-                  {copied ? "Copied!" : "🔗 Share search"}
+                  {copied ? t.copied : t.shareSearch}
                 </button>
               )}
             </div>
 
             {sortedListings.length === 0 && (
               <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-                No results match these filters.{" "}
+                {t.noResultsFilters}{" "}
                 <button
                   type="button"
                   onClick={() => {
@@ -822,7 +841,7 @@ export default function Home() {
                   }}
                   className="font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                 >
-                  Clear filters
+                  {t.clearFilters}
                 </button>
               </p>
             )}
