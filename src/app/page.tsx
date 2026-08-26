@@ -111,6 +111,29 @@ function priceBadge(price: number, median: number): string | null {
   return null; // near-median isn't worth calling out
 }
 
+// Combines the three signals a user otherwise has to weigh separately (match %, price
+// vs. others, condition verdict) into one at-a-glance badge. Only meaningful once a
+// condition check has run - callers gate on that.
+function dealScore(
+  matchScore: number | undefined,
+  priceBadgeLabel: string | null,
+  verdict: Verdict["verdict"]
+): { label: string; color: string } {
+  let points = 0;
+  if (typeof matchScore === "number") {
+    if (matchScore >= 80) points += 1;
+    else if (matchScore < 50) points -= 1;
+  }
+  if (priceBadgeLabel === "Below others found") points += 1;
+  else if (priceBadgeLabel === "Above others found") points -= 1;
+  if (verdict === "buy") points += 1;
+  else if (verdict === "skip") points -= 1;
+
+  if (points >= 2) return { label: "Great deal", color: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" };
+  if (points <= -2) return { label: "Risky", color: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" };
+  return { label: "Fair deal", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300" };
+}
+
 type Issue = {
   issue: string;
   difficulty: "diy" | "garage";
@@ -962,6 +985,7 @@ export default function Home() {
                 {verdicts[l.url]?.data && (() => {
                   const data = verdicts[l.url]!.data!;
                   const expanded = expandedVerdicts.has(l.url);
+                  const deal = dealScore(l.match_score, badge, data.verdict);
                   return (
                   <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
                     <button
@@ -969,6 +993,9 @@ export default function Home() {
                       className="flex w-full items-center justify-between gap-2 text-left"
                     >
                       <span>
+                        <span className={`mr-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${deal.color}`}>
+                          {deal.label}
+                        </span>
                         <span className="font-medium text-black dark:text-zinc-50">{VERDICT_LABEL[data.verdict]}</span>
                         {data.issues.length > 0 && (
                           <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">
