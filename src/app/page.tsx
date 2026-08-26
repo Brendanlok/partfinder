@@ -776,6 +776,14 @@ export default function Home() {
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${matchColor(l.match_score)}`}>
                           {l.match_score}% match
                         </span>
+                        {l.match_tags?.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                          >
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
