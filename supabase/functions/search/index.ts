@@ -59,23 +59,14 @@ async function fetchListingSnippet(url: string): Promise<{ title: string; conten
     if (!res.ok) return null;
     const html = await res.text();
     const title = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1];
-    const content = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/)?.[1] ?? "";
+    // autoscout24's og:description is a generic marketing blurb, but its <meta name="description">
+    // carries "€ 18.980 | 103.700 km | 08/2017 | Benzin" - keep both so year/mileage/location
+    // reach Gemini regardless of which site the ad is from.
+    const ogDesc = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/)?.[1] ?? "";
+    const metaDesc = html.match(/<meta[^>]+name="description"[^>]+content="([^"]*)"/)?.[1] ?? "";
+    const content = [metaDesc, ogDesc].filter(Boolean).join(" ").trim();
     const image = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/)?.[1] ?? null;
     return title ? { title, content, image } : null;
-  } catch {
-    return null;
-  }
-}
-
-// Photos are shown in the results list now, so every listing needs one fetched - direct
-// Tavily hits previously skipped fetching their page entirely (title/content come straight
-// from Tavily). Only the image is needed here, Tavily's own title/content stay authoritative.
-async function fetchImage(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, { headers: { "User-Agent": UA } });
-    if (!res.ok) return null;
-    const html = await res.text();
-    return html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/)?.[1] ?? null;
   } catch {
     return null;
   }
@@ -137,10 +128,14 @@ async function handleSearch(want: string): Promise<Response> {
   const directResultsRaw = (tavilyData.results ?? []).filter(
     (r: { url: string }) => onListingSite(r) && isSingleListingUrl(r.url)
   );
-  const directImages = await Promise.all(directResultsRaw.map((r: { url: string }) => fetchImage(r.url)));
+  // Fetch each direct hit's own page once - the og:description carries year/mileage that
+  // Tavily's snippet often drops (autoscout24 especially). Append it to Tavily's content
+  // rather than replacing, so mobile.de (blocks our fetch -> null snippet) still has text.
+  const directSnippets = await Promise.all(directResultsRaw.map((r: { url: string }) => fetchListingSnippet(r.url)));
   const directResults = directResultsRaw.map((r: { title: string; url: string; content: string }, i: number) => ({
     ...r,
-    image: directImages[i],
+    content: directSnippets[i]?.content ? `${r.content} ${directSnippets[i]!.content}`.trim() : r.content,
+    image: directSnippets[i]?.image ?? null,
   }));
 
   // ponytail: always run the crawl fallback too, not only when direct hits are zero (root
@@ -195,6 +190,16 @@ async function handleSearch(want: string): Promise<Response> {
     return false;
   };
 
+  // ponytail: autoscout24 (and often kleinanzeigen) snippets carry German-formatted
+  // values Gemini echoes through verbatim - "85.000 km", "EZ 03/2018". Digits-only
+  // normalization here lets the shape check keep them instead of dropping the field,
+  // which was killing year/mileage on nearly every autoscout24 result.
+  const normalizeField = (key: string, raw: string): string => {
+    if (key === "mileage_km") return raw.replace(/km/gi, "").replace(/[.,\s]/g, "").trim();
+    if (key === "year") return raw.match(/(?:19|20)\d{2}/)?.[0] ?? raw.trim();
+    return raw;
+  };
+
   async function askGemini(): Promise<{ listings: Record<string, unknown>[] } | null> {
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
@@ -212,7 +217,7 @@ async function handleSearch(want: string): Promise<Response> {
                       url: r.url,
                       snippet: r.content,
                     }))
-                  )}\n\nReturn exactly one listing entry per raw result URL above (skip an entry only if it's a generic article/guide with no specific car for sale, or plainly doesn't match what the user wants) - never invent a second or third car out of one URL's title/snippet, and never reuse one URL under a different car's specs. Use that URL's own title/snippet only for its entry. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year, mileage_km (a km distance as digits only, no "km" suffix and never a price - or null if not shown), location, source site. Each field must be the short raw value only - never explanations or reasoning. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Each tag must be a finished descriptive phrase - never a status word like "unconfirmed", "unmerged", "unknown" or "n/a"; if you can't confirm something, just leave that tag out. Return JSON only.`,
+                  )}\n\nReturn exactly one listing entry per raw result URL above (skip an entry only if it's a generic article/guide with no specific car for sale, or plainly doesn't match what the user wants) - never invent a second or third car out of one URL's title/snippet, and never reuse one URL under a different car's specs. Use that URL's own title/snippet only for its entry. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year (the 4-digit first-registration year - e.g. from "EZ 03/2018" return "2018" - or null if not shown), mileage_km (a km distance as digits only, no "km" suffix, no German thousands separators so "85.000 km" becomes "85000", and never a price - or null if not shown), location, source site. Each field must be the short raw value only - never explanations or reasoning. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Each tag must be a finished descriptive phrase - never a status word like "unconfirmed", "unmerged", "unknown" or "n/a"; if you can't confirm something, just leave that tag out. Return JSON only.`,
                 },
               ],
             },
@@ -274,12 +279,17 @@ async function handleSearch(want: string): Promise<Response> {
   const listings = result.listings.map((l: Record<string, unknown>) => {
     const clean = { ...l };
     for (const key of OPTIONAL_FIELDS) {
-      const raw = typeof clean[key] === "string" ? (clean[key] as string) : null;
-      const v = raw?.trim().toLowerCase() ?? null;
+      const original = typeof clean[key] === "string" ? (clean[key] as string) : null;
+      if (original === null) continue;
+      const raw = key === "year" || key === "mileage_km" ? normalizeField(key, original) : original;
+      const v = raw.trim().toLowerCase();
       const isZero = (key === "price" || key === "mileage_km") && v === "0";
-      const isLeakedField = raw !== null && raw.length > MAX_FIELD_LEN;
-      const isBadShape = raw !== null && isWrongShape(key, raw);
-      if (v !== null && (v === key || isZero || isLeakedField || isBadShape)) delete clean[key];
+      // length check on the pre-normalized value - normalization strips spaces and could
+      // otherwise squeeze leaked reasoning text under the limit
+      const isLeakedField = original.length > MAX_FIELD_LEN;
+      const isBadShape = isWrongShape(key, raw);
+      if (v === key || isZero || isLeakedField || isBadShape) delete clean[key];
+      else clean[key] = raw;
     }
     // clamp in case Gemini strays outside the 0-100 range it was asked for
     if (typeof clean.match_score === "number") {
