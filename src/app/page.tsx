@@ -5,6 +5,7 @@ import { findDuplicates, duplicateSummary, pickRepresentatives, type DuplicateMa
 import { monthlyPayment } from "@/lib/finance";
 import { draftNegotiationMessage } from "@/lib/negotiation";
 import { translations, LANG_KEY, type Lang } from "@/lib/translations";
+import { parsePrice } from "@/lib/price";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
 // lib (still non-standard/prefixed in some browsers), so type it loosely ourselves.
@@ -72,12 +73,6 @@ function sortListings(listings: Listing[], sortBy: SortOption): Listing[] {
       sorted.sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1));
   }
   return sorted;
-}
-
-function parsePrice(price?: string): number | null {
-  if (!price) return null;
-  const digits = price.replace(/[^\d]/g, "");
-  return digits ? Number(digits) : null;
 }
 
 function parseMileage(mileage?: string): number | null {
@@ -195,7 +190,9 @@ export default function Home() {
   // sticks to whatever the user last picked via the EN/DE toggle.
   const [lang, setLang] = useState<Lang>("en");
   const t = translations[lang];
-  const nf = (n: number) => n.toLocaleString(lang === "de" ? "de-DE" : "en-US");
+  // Every nf() call is a euro amount shown to the user - round to whole euros so a
+  // part price with cents (129,95 €) doesn't drag decimals into the build/offer totals.
+  const nf = (n: number) => Math.round(n).toLocaleString(lang === "de" ? "de-DE" : "en-US");
   const [want, setWant] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
