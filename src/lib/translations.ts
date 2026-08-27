@@ -1,12 +1,16 @@
-// Lighter first-pass i18n: covers the main search screen only (header, search box,
-// filters, sort, empty states) - not the listing detail modal, build panel, or compare
-// view yet (Lok's call: expand later if wanted, rather than ship a half-translated app).
-// Plain dictionary, not a library - this app has exactly two languages and no plurals
-// logic beyond a simple count interpolation, doesn't need i18next/etc.
+// Full i18n pass: main search screen + results cards + listing detail modal (condition
+// check, build panel, financing) + compare view. Plain dictionary, not a library - this
+// app has exactly two languages and no plurals logic beyond a simple count interpolation,
+// doesn't need i18next/etc. The seller-facing negotiation message is always German
+// (negotiation.ts) regardless of this toggle - the seller is in Germany either way.
 
 export type Lang = "en" | "de";
 
 export const LANG_KEY = "partfinder:lang";
+
+type VerdictKey = "buy" | "maybe" | "skip";
+type DifficultyKey = "diy" | "garage";
+type SortKey = "relevance" | "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
 
 type Dict = {
   subtitle: string;
@@ -23,7 +27,7 @@ type Dict = {
   statusMessages: readonly string[];
   noSavedListings: string;
   noMatchingListings: string;
-  sortLabels: Record<"relevance" | "price_asc" | "price_desc" | "year_desc" | "mileage_asc", string>;
+  sortLabels: Record<SortKey, string>;
   minPricePlaceholder: string;
   maxPricePlaceholder: string;
   partsBuildCost: string;
@@ -35,6 +39,72 @@ type Dict = {
   noResultsFilters: string;
   clearFilters: string;
   showingOf: (shown: number, total: number) => string;
+
+  // Voice input language tag for the Web Speech API
+  speechLang: string;
+
+  // Results cards
+  matchSuffix: string; // "% match" / "% Treffer"
+  priceBelow: string;
+  priceAbove: string;
+  priceBadgeTitle: string;
+  saveListing: string;
+  removeFromSaved: string;
+  compare: string;
+  alsoOn: string; // "Also on" / "Auch auf"
+
+  // Detail modal
+  close: string;
+  alsoListedOn: string;
+  checkCondition: string;
+  readingPhotos: string;
+  verdictLabels: Record<VerdictKey, string>;
+  difficultyLabels: Record<DifficultyKey, string>;
+  dealLabels: Record<"great" | "fair" | "risky", string>;
+  issuesFound: (n: number) => string;
+  details: string;
+  hide: string;
+  howToFix: string;
+  writingSteps: string;
+  photosDisclaimer: (n: number) => string;
+  findPartsNeeded: string;
+  buildYourCar: string;
+  lookingUpParts: string;
+  bestDealFound: string;
+  shopThisPart: string;
+  partsSourcesNote: string;
+  addPartPlaceholder: string;
+  partPricePlaceholder: string;
+  add: string;
+  yourBuild: string;
+  buildParenthetical: (n: number) => string;
+  suggestedOffer: (offer: string, partsCost: string) => string;
+  draftMessage: string;
+  copyMessage: string;
+  financingEstimate: string;
+  downPaymentPlaceholder: string;
+  aprPlaceholder: string;
+  termPlaceholder: string;
+  perMonth: (amount: string) => string;
+  downPaymentTooHigh: string;
+  financingDisclaimer: string;
+  copySummary: string;
+  summaryConditionLine: (label: string, summary: string) => string;
+  summaryCheckedParts: string;
+  summaryBuildTotal: (total: string) => string;
+  summaryOffer: (offer: string) => string;
+
+  // Compare view
+  compareListings: string;
+  colPrice: string;
+  colYear: string;
+  colMileage: string;
+  colSource: string;
+  colMatch: string;
+  colCondition: string;
+  colBuildTotal: string;
+  notChecked: string;
+  openDetails: string;
 };
 
 export const translations: Record<Lang, Dict> = {
@@ -79,6 +149,82 @@ export const translations: Record<Lang, Dict> = {
     noResultsFilters: "No results match these filters.",
     clearFilters: "Clear filters",
     showingOf: (shown, total) => `Showing ${shown} of ${total} listings`,
+
+    speechLang: "en-US",
+
+    matchSuffix: "% match",
+    priceBelow: "Below others found",
+    priceAbove: "Above others found",
+    priceBadgeTitle: "Compared to other results in this search, not full market data",
+    saveListing: "Save listing",
+    removeFromSaved: "Remove from saved",
+    compare: "Compare",
+    alsoOn: "Also on",
+
+    close: "Close",
+    alsoListedOn: "Also listed on",
+    checkCondition: "Check condition from photos",
+    readingPhotos: "Reading photos…",
+    verdictLabels: {
+      buy: "Looks good",
+      maybe: "Worth a closer look",
+      skip: "Proceed with caution",
+    },
+    difficultyLabels: {
+      diy: "DIY",
+      garage: "Garage job",
+    },
+    dealLabels: {
+      great: "Great deal",
+      fair: "Fair deal",
+      risky: "Risky",
+    },
+    issuesFound: (n) => `· ${n} issue${n === 1 ? "" : "s"} found`,
+    details: "Details ▼",
+    hide: "Hide ▲",
+    howToFix: "How to fix",
+    writingSteps: "Writing up steps…",
+    photosDisclaimer: (n) =>
+      `From ${n} listing photo${n === 1 ? "" : "s"} - not a substitute for an in-person inspection.`,
+    findPartsNeeded: "Find parts needed",
+    buildYourCar: "Build your car",
+    lookingUpParts: "Looking up parts…",
+    bestDealFound: "best deal found",
+    shopThisPart: "shop this part",
+    partsSourcesNote:
+      "Parts from kfzteile24.de and daparto.de (a price-comparison site) - daparto.de results usually show a real price, kfzteile24.de usually needs your exact model/engine picked on-site so those links go to the right part category rather than a priced listing.",
+    addPartPlaceholder: "Add a part (e.g. Exhaust tips)",
+    partPricePlaceholder: "€ (optional)",
+    add: "Add",
+    yourBuild: "Your build",
+    buildParenthetical: (n) => `(car + ${n} checked part${n === 1 ? "" : "s"})`,
+    suggestedOffer: (offer, partsCost) =>
+      `💬 Suggested opening offer: €${offer} (asking price minus ~€${partsCost} in known parts costs - a starting point, not gospel)`,
+    draftMessage: "✉️ Draft message to seller",
+    copyMessage: "📋 Copy message",
+    financingEstimate: "Financing estimate",
+    downPaymentPlaceholder: "Down payment €",
+    aprPlaceholder: "APR %",
+    termPlaceholder: "Term (months)",
+    perMonth: (amount) => `≈ €${amount}/mo`,
+    downPaymentTooHigh: "Enter a down payment less than the build total",
+    financingDisclaimer: "Rough math only, not a loan offer - your bank's actual rate and fees will differ.",
+    copySummary: "📋 Copy summary",
+    summaryConditionLine: (label, summary) => `Condition: ${label} — ${summary}`,
+    summaryCheckedParts: "Checked parts:",
+    summaryBuildTotal: (total) => `Build total: €${total}`,
+    summaryOffer: (offer) => `Suggested opening offer: €${offer}`,
+
+    compareListings: "Compare listings",
+    colPrice: "Price",
+    colYear: "Year",
+    colMileage: "Mileage",
+    colSource: "Source",
+    colMatch: "Match",
+    colCondition: "Condition",
+    colBuildTotal: "Build total",
+    notChecked: "Not checked",
+    openDetails: "Open details",
   },
   de: {
     subtitle: "Beschreibe das Auto, das du suchst. Wir durchsuchen mobile.de, AutoScout24 und Kleinanzeigen nach passenden Angeboten.",
@@ -121,5 +267,81 @@ export const translations: Record<Lang, Dict> = {
     noResultsFilters: "Keine Ergebnisse mit diesen Filtern.",
     clearFilters: "Filter zurücksetzen",
     showingOf: (shown, total) => `${shown} von ${total} Anzeigen`,
+
+    speechLang: "de-DE",
+
+    matchSuffix: "% Treffer",
+    priceBelow: "Günstiger als andere",
+    priceAbove: "Teurer als andere",
+    priceBadgeTitle: "Im Vergleich zu anderen Ergebnissen dieser Suche, keine vollständigen Marktdaten",
+    saveListing: "Anzeige merken",
+    removeFromSaved: "Aus Merkliste entfernen",
+    compare: "Vergleichen",
+    alsoOn: "Auch auf",
+
+    close: "Schließen",
+    alsoListedOn: "Auch inseriert auf",
+    checkCondition: "Zustand anhand der Fotos prüfen",
+    readingPhotos: "Fotos werden ausgewertet…",
+    verdictLabels: {
+      buy: "Sieht gut aus",
+      maybe: "Genauer ansehen",
+      skip: "Mit Vorsicht genießen",
+    },
+    difficultyLabels: {
+      diy: "Selbst machbar",
+      garage: "Werkstatt nötig",
+    },
+    dealLabels: {
+      great: "Top-Angebot",
+      fair: "Faires Angebot",
+      risky: "Riskant",
+    },
+    issuesFound: (n) => `· ${n} ${n === 1 ? "Problem" : "Probleme"} gefunden`,
+    details: "Details ▼",
+    hide: "Ausblenden ▲",
+    howToFix: "Anleitung",
+    writingSteps: "Schritte werden erstellt…",
+    photosDisclaimer: (n) =>
+      `Aus ${n} ${n === 1 ? "Anzeigenfoto" : "Anzeigenfotos"} - ersetzt keine Besichtigung vor Ort.`,
+    findPartsNeeded: "Benötigte Teile finden",
+    buildYourCar: "Auto zusammenstellen",
+    lookingUpParts: "Teile werden gesucht…",
+    bestDealFound: "bestes gefundenes Angebot",
+    shopThisPart: "Teil ansehen",
+    partsSourcesNote:
+      "Teile von kfzteile24.de und daparto.de (Preisvergleichsseite) - daparto.de zeigt meist einen echten Preis, kfzteile24.de braucht meist dein genaues Modell/Motor vor Ort, daher führen diese Links zur passenden Teilekategorie statt zu einem Angebot mit Preis.",
+    addPartPlaceholder: "Teil hinzufügen (z. B. Endrohre)",
+    partPricePlaceholder: "€ (optional)",
+    add: "Hinzufügen",
+    yourBuild: "Deine Zusammenstellung",
+    buildParenthetical: (n) => `(Auto + ${n} ${n === 1 ? "ausgewähltes Teil" : "ausgewählte Teile"})`,
+    suggestedOffer: (offer, partsCost) =>
+      `💬 Vorgeschlagenes Startangebot: ${offer} € (Anzeigenpreis minus ~${partsCost} € bekannte Teilekosten - ein Ausgangspunkt, keine feste Größe)`,
+    draftMessage: "✉️ Nachricht an Verkäufer verfassen",
+    copyMessage: "📋 Nachricht kopieren",
+    financingEstimate: "Finanzierungsschätzung",
+    downPaymentPlaceholder: "Anzahlung €",
+    aprPlaceholder: "Zinssatz %",
+    termPlaceholder: "Laufzeit (Monate)",
+    perMonth: (amount) => `≈ ${amount} €/Mon.`,
+    downPaymentTooHigh: "Gib eine Anzahlung unter der Gesamtsumme ein",
+    financingDisclaimer: "Nur grobe Rechnung, kein Kreditangebot - der tatsächliche Zinssatz und die Gebühren deiner Bank weichen ab.",
+    copySummary: "📋 Zusammenfassung kopieren",
+    summaryConditionLine: (label, summary) => `Zustand: ${label} — ${summary}`,
+    summaryCheckedParts: "Ausgewählte Teile:",
+    summaryBuildTotal: (total) => `Gesamtsumme: ${total} €`,
+    summaryOffer: (offer) => `Vorgeschlagenes Startangebot: ${offer} €`,
+
+    compareListings: "Anzeigen vergleichen",
+    colPrice: "Preis",
+    colYear: "Baujahr",
+    colMileage: "Laufleistung",
+    colSource: "Quelle",
+    colMatch: "Treffer",
+    colCondition: "Zustand",
+    colBuildTotal: "Gesamtsumme",
+    notChecked: "Nicht geprüft",
+    openDetails: "Details öffnen",
   },
 };

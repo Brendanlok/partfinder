@@ -49,13 +49,7 @@ function matchColor(score: number): string {
 
 type SortOption = "relevance" | "price_asc" | "price_desc" | "year_desc" | "mileage_asc";
 
-const SORT_LABEL: Record<SortOption, string> = {
-  relevance: "Best match",
-  price_asc: "Price: low to high",
-  price_desc: "Price: high to low",
-  year_desc: "Newest year",
-  mileage_asc: "Lowest mileage",
-};
+const SORT_OPTIONS: SortOption[] = ["relevance", "price_asc", "price_desc", "year_desc", "mileage_asc"];
 
 function sortListings(listings: Listing[], sortBy: SortOption): Listing[] {
   const sorted = [...listings];
@@ -101,33 +95,35 @@ function medianPrice(listings: Listing[]): number | null {
 
 // ponytail: inspired by CarGurus' deal-rating badge, but scoped honestly to what we
 // actually have - just this search's own results, not a market-wide price database.
-function priceBadge(price: number, median: number): string | null {
-  if (price <= median * 0.9) return "Below others found";
-  if (price >= median * 1.1) return "Above others found";
+type PriceBadge = "below" | "above";
+function priceBadge(price: number, median: number): PriceBadge | null {
+  if (price <= median * 0.9) return "below";
+  if (price >= median * 1.1) return "above";
   return null; // near-median isn't worth calling out
 }
 
 // Combines the three signals a user otherwise has to weigh separately (match %, price
 // vs. others, condition verdict) into one at-a-glance badge. Only meaningful once a
 // condition check has run - callers gate on that.
+type DealKey = "great" | "fair" | "risky";
 function dealScore(
   matchScore: number | undefined,
-  priceBadgeLabel: string | null,
+  badge: PriceBadge | null,
   verdict: Verdict["verdict"]
-): { label: string; color: string } {
+): { key: DealKey; color: string } {
   let points = 0;
   if (typeof matchScore === "number") {
     if (matchScore >= 80) points += 1;
     else if (matchScore < 50) points -= 1;
   }
-  if (priceBadgeLabel === "Below others found") points += 1;
-  else if (priceBadgeLabel === "Above others found") points -= 1;
+  if (badge === "below") points += 1;
+  else if (badge === "above") points -= 1;
   if (verdict === "buy") points += 1;
   else if (verdict === "skip") points -= 1;
 
-  if (points >= 2) return { label: "Great deal", color: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" };
-  if (points <= -2) return { label: "Risky", color: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" };
-  return { label: "Fair deal", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300" };
+  if (points >= 2) return { key: "great", color: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" };
+  if (points <= -2) return { key: "risky", color: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" };
+  return { key: "fair", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300" };
 }
 
 type Issue = {
@@ -140,11 +136,6 @@ type Verdict = {
   condition_summary: string;
   verdict: "buy" | "maybe" | "skip";
   photos_checked: number;
-};
-
-const DIFFICULTY_LABEL: Record<Issue["difficulty"], string> = {
-  diy: "DIY",
-  garage: "Garage job",
 };
 
 type Tutorial = {
@@ -195,12 +186,6 @@ type VerdictState = {
   data?: Verdict;
 };
 
-const VERDICT_LABEL: Record<Verdict["verdict"], string> = {
-  buy: "Looks good",
-  maybe: "Worth a closer look",
-  skip: "Proceed with caution",
-};
-
 const LAST_SEARCH_KEY = "partfinder:lastSearch";
 const SAVED_KEY = "partfinder:saved";
 const MAX_COMPARE = 3;
@@ -210,6 +195,7 @@ export default function Home() {
   // sticks to whatever the user last picked via the EN/DE toggle.
   const [lang, setLang] = useState<Lang>("en");
   const t = translations[lang];
+  const nf = (n: number) => n.toLocaleString(lang === "de" ? "de-DE" : "en-US");
   const [want, setWant] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -460,7 +446,9 @@ export default function Home() {
     const SpeechRecognitionCtor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognitionCtor) return;
     const recognition = new SpeechRecognitionCtor();
-    recognition.lang = navigator.language || "en-US";
+    // Follow the EN/DE toggle, not navigator.language - a German user on an
+    // English-set phone still describes the car in German.
+    recognition.lang = t.speechLang;
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onresult = (e) => {
@@ -558,6 +546,7 @@ export default function Home() {
     setSourceFilter(new Set());
     setMinPrice("");
     setMaxPrice("");
+    setHideDuplicates(false);
     setShowSaved(false);
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_SEARCH_FUNCTION_URL as string, {
@@ -759,7 +748,7 @@ export default function Home() {
                 onChange={(e) => setSortBy(e.target.value as SortOption)}
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               >
-                {(Object.keys(SORT_LABEL) as SortOption[]).map((opt) => (
+                {SORT_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {t.sortLabels[opt]}
                   </option>
@@ -870,13 +859,13 @@ export default function Home() {
                       disabled={!compareSet.has(l.url) && compareSet.size >= MAX_COMPARE}
                       className="h-3.5 w-3.5 rounded"
                     />
-                    Compare
+                    {t.compare}
                   </label>
                 )}
                 <button
                   type="button"
                   onClick={() => toggleSaved(l)}
-                  aria-label={saved[l.url] ? "Remove from saved" : "Save listing"}
+                  aria-label={saved[l.url] ? t.removeFromSaved : t.saveListing}
                   className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-base leading-none text-white hover:bg-black/70"
                 >
                   {saved[l.url] ? "★" : "☆"}
@@ -907,7 +896,7 @@ export default function Home() {
                     {typeof l.match_score === "number" && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${matchColor(l.match_score)}`}>
-                          {l.match_score}% match
+                          {l.match_score}{t.matchSuffix}
                         </span>
                         {l.match_tags?.map((tag) => (
                           <span
@@ -923,7 +912,7 @@ export default function Home() {
                       {l.price && <span>{l.price}</span>}
                       {badge && (
                         <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-                          {badge}
+                          {badge === "below" ? t.priceBelow : t.priceAbove}
                         </span>
                       )}
                       {l.year && <span>{l.year}</span>}
@@ -932,7 +921,7 @@ export default function Home() {
                     </div>
                     {duplicates[l.url] && (
                       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        Also on {duplicateSummary(duplicates[l.url])}
+                        {t.alsoOn} {duplicateSummary(duplicates[l.url])}
                       </p>
                     )}
                   </div>
@@ -985,7 +974,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => toggleSaved(l)}
-                  aria-label={saved[l.url] ? "Remove from saved" : "Save listing"}
+                  aria-label={saved[l.url] ? t.removeFromSaved : t.saveListing}
                   className="absolute right-14 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-lg leading-none text-white hover:bg-black/80"
                 >
                   {saved[l.url] ? "★" : "☆"}
@@ -993,7 +982,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setSelectedUrl(null)}
-                  aria-label="Close"
+                  aria-label={t.close}
                   className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
                 >
                   ✕
@@ -1011,7 +1000,7 @@ export default function Home() {
                 {typeof l.match_score === "number" && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${matchColor(l.match_score)}`}>
-                      {l.match_score}% match
+                      {l.match_score}{t.matchSuffix}
                     </span>
                     {l.match_tags?.map((tag) => (
                       <span
@@ -1032,9 +1021,9 @@ export default function Home() {
                   {badge && (
                     <span
                       className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
-                      title="Compared to other results in this search, not full market data"
+                      title={t.priceBadgeTitle}
                     >
-                      {badge}
+                      {badge === "below" ? t.priceBelow : t.priceAbove}
                     </span>
                   )}
                   {l.year && <span>{l.year}</span>}
@@ -1047,7 +1036,7 @@ export default function Home() {
 
                 {duplicates[l.url] && (
                   <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    Also listed on{" "}
+                    {t.alsoListedOn}{" "}
                     {duplicates[l.url].map((m, i) => (
                       <span key={m.url}>
                         {i > 0 && ", "}
@@ -1069,13 +1058,13 @@ export default function Home() {
                     onClick={() => checkCondition(l)}
                     className="mt-3 text-sm font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                   >
-                    Check condition from photos
+                    {t.checkCondition}
                   </button>
                 )}
 
                 {verdicts[l.url]?.loading && (
                   <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
-                    Reading photos…
+                    {t.readingPhotos}
                   </p>
                 )}
 
@@ -1097,16 +1086,16 @@ export default function Home() {
                     >
                       <span>
                         <span className={`mr-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${deal.color}`}>
-                          {deal.label}
+                          {t.dealLabels[deal.key]}
                         </span>
-                        <span className="font-medium text-black dark:text-zinc-50">{VERDICT_LABEL[data.verdict]}</span>
+                        <span className="font-medium text-black dark:text-zinc-50">{t.verdictLabels[data.verdict]}</span>
                         {data.issues.length > 0 && (
                           <span className="ml-1.5 text-zinc-500 dark:text-zinc-400">
-                            · {data.issues.length} issue{data.issues.length === 1 ? "" : "s"} found
+                            {" "}{t.issuesFound(data.issues.length)}
                           </span>
                         )}
                       </span>
-                      <span className="shrink-0 text-zinc-400 dark:text-zinc-500">{expanded ? "Hide ▲" : "Details ▼"}</span>
+                      <span className="shrink-0 text-zinc-400 dark:text-zinc-500">{expanded ? t.hide : t.details}</span>
                     </button>
                     {expanded && (
                     <>
@@ -1119,7 +1108,7 @@ export default function Home() {
                           <li key={i}>
                             {item.issue}{" "}
                             <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-                              {DIFFICULTY_LABEL[item.difficulty]}
+                              {t.difficultyLabels[item.difficulty]}
                             </span>
                             {item.difficulty === "diy" && (() => {
                               const tutorialKey = `${l.url}::${item.issue}`;
@@ -1130,12 +1119,12 @@ export default function Home() {
                                     onClick={() => fetchTutorial(l.url, item.issue, l.want ?? want)}
                                     className="ml-2 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                                   >
-                                    How to fix
+                                    {t.howToFix}
                                   </button>
                                 )}
                                 {tutorials[tutorialKey]?.loading && (
                                   <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
-                                    Writing up steps…
+                                    {t.writingSteps}
                                   </span>
                                 )}
                                 {tutorials[tutorialKey]?.error && (
@@ -1180,9 +1169,7 @@ export default function Home() {
                       </ul>
                     )}
                     <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-600">
-                      From {data.photos_checked} listing photo
-                      {data.photos_checked === 1 ? "" : "s"} - not a
-                      substitute for an in-person inspection.
+                      {t.photosDisclaimer(data.photos_checked)}
                     </p>
 
                     {showPartsCost && diyIssues.length > 0 && !partsResult && (
@@ -1191,7 +1178,7 @@ export default function Home() {
                           onClick={() => fetchParts(l.url, diyIssues, l.want ?? want)}
                           className="text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                         >
-                          Find parts needed
+                          {t.findPartsNeeded}
                         </button>
                       </div>
                     )}
@@ -1203,10 +1190,10 @@ export default function Home() {
 
                 {showPartsCost && (
                   <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800">
-                    <p className="font-medium text-black dark:text-zinc-50">Build your car</p>
+                    <p className="font-medium text-black dark:text-zinc-50">{t.buildYourCar}</p>
 
                     {partsResult?.loading && (
-                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Looking up parts…</p>
+                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{t.lookingUpParts}</p>
                     )}
                     {partsResult?.error && (
                       <p className="mt-2 text-xs text-red-600 dark:text-red-400">{partsResult.error}</p>
@@ -1235,14 +1222,14 @@ export default function Home() {
                                     rel="noopener noreferrer"
                                     className="ml-1 underline decoration-zinc-400 underline-offset-2"
                                   >
-                                    {p.price ? "best deal found" : "shop this part"}
+                                    {p.price ? t.bestDealFound : t.shopThisPart}
                                   </a>
                                 )}
                               </span>
                               {isCustom && (
                                 <button
                                   onClick={() => removeCustomPart(l.url, i - dataParts.length)}
-                                  aria-label="Remove"
+                                  aria-label={t.clear}
                                   className="shrink-0 text-zinc-400 hover:text-red-600 dark:text-zinc-500"
                                 >
                                   ✕
@@ -1255,9 +1242,7 @@ export default function Home() {
                     )}
                     {allParts.some((p) => p.url) && (
                       <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-600">
-                        Parts from kfzteile24.de and daparto.de (a price-comparison site) - daparto.de results
-                        usually show a real price, kfzteile24.de usually needs your exact model/engine picked
-                        on-site so those links go to the right part category rather than a priced listing.
+                        {t.partsSourcesNote}
                       </p>
                     )}
 
@@ -1265,13 +1250,13 @@ export default function Home() {
                       <input
                         value={newPartName}
                         onChange={(e) => setNewPartName(e.target.value)}
-                        placeholder="Add a part (e.g. Exhaust tips)"
+                        placeholder={t.addPartPlaceholder}
                         className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                       />
                       <input
                         value={newPartPrice}
                         onChange={(e) => setNewPartPrice(e.target.value)}
-                        placeholder="€ (optional)"
+                        placeholder={t.partPricePlaceholder}
                         className="w-24 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                       />
                       <button
@@ -1279,16 +1264,16 @@ export default function Home() {
                         disabled={!newPartName.trim()}
                         className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
                       >
-                        Add
+                        {t.add}
                       </button>
                     </div>
 
                     <p className="mt-3 text-sm font-medium text-black dark:text-zinc-50">
-                      Your build: €{buildTotal(price, checkedItems).toLocaleString()}
+                      {t.yourBuild}: {nf(buildTotal(price, checkedItems))} €
                       {checkedItems.length > 0 && (
                         <span className="font-normal text-zinc-500 dark:text-zinc-400">
                           {" "}
-                          (car + {checkedItems.length} checked part{checkedItems.length === 1 ? "" : "s"})
+                          {t.buildParenthetical(checkedItems.length)}
                         </span>
                       )}
                     </p>
@@ -1297,9 +1282,10 @@ export default function Home() {
                       // asking price minus the found parts' real cost is a defensible
                       // opening number, not a fabricated estimate.
                       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        💬 Suggested opening offer: €{Math.max(0, price - partsTotal(dataParts)).toLocaleString()}{" "}
-                        (asking price minus ~€{partsTotal(dataParts).toLocaleString()} in known parts costs -
-                        a starting point, not gospel)
+                        {t.suggestedOffer(
+                          nf(Math.max(0, price - partsTotal(dataParts))),
+                          nf(partsTotal(dataParts))
+                        )}
                       </p>
                     )}
                     {price !== null && dataParts.some((p) => p.price) && (
@@ -1311,7 +1297,7 @@ export default function Home() {
                           onClick={() => toggleDraftOpen(l.url)}
                           className="text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                         >
-                          ✉️ Draft message to seller
+                          {t.draftMessage}
                         </button>
                         {draftOpen.has(l.url) &&
                           (() => {
@@ -1330,7 +1316,7 @@ export default function Home() {
                                   onClick={() => copyDraft(message)}
                                   className="mt-1 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                                 >
-                                  {draftCopied ? "Copied!" : "📋 Copy message"}
+                                  {draftCopied ? t.copied : t.copyMessage}
                                 </button>
                               </div>
                             );
@@ -1344,14 +1330,14 @@ export default function Home() {
                       const monthly = monthlyPayment(financed, Number(financeApr) || 0, Number(financeTerm) || 0);
                       return (
                         <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
-                          <p className="text-xs font-medium text-black dark:text-zinc-50">Financing estimate</p>
+                          <p className="text-xs font-medium text-black dark:text-zinc-50">{t.financingEstimate}</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <input
                               type="number"
                               inputMode="numeric"
                               value={financeDown}
                               onChange={(e) => setFinanceDown(e.target.value)}
-                              placeholder="Down payment €"
+                              placeholder={t.downPaymentPlaceholder}
                               className="w-32 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                             />
                             <input
@@ -1359,7 +1345,7 @@ export default function Home() {
                               inputMode="decimal"
                               value={financeApr}
                               onChange={(e) => setFinanceApr(e.target.value)}
-                              placeholder="APR %"
+                              placeholder={t.aprPlaceholder}
                               className="w-20 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                             />
                             <input
@@ -1367,17 +1353,17 @@ export default function Home() {
                               inputMode="numeric"
                               value={financeTerm}
                               onChange={(e) => setFinanceTerm(e.target.value)}
-                              placeholder="Term (months)"
+                              placeholder={t.termPlaceholder}
                               className="w-28 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                             />
                           </div>
                           <p className="mt-2 text-sm font-medium text-black dark:text-zinc-50">
                             {monthly !== null
-                              ? `≈ €${Math.round(monthly).toLocaleString()}/mo`
-                              : "Enter a down payment less than the build total"}
+                              ? t.perMonth(nf(Math.round(monthly)))
+                              : t.downPaymentTooHigh}
                           </p>
                           <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-600">
-                            Rough math only, not a loan offer - your bank's actual rate and fees will differ.
+                            {t.financingDisclaimer}
                           </p>
                         </div>
                       );
@@ -1389,15 +1375,15 @@ export default function Home() {
                       const lines = [
                         l.title,
                         [l.price, l.year, l.mileage_km ? `${l.mileage_km} km` : null].filter(Boolean).join(" · "),
-                        data ? `Condition: ${VERDICT_LABEL[data.verdict]} — ${data.condition_summary}` : null,
+                        data ? t.summaryConditionLine(t.verdictLabels[data.verdict], data.condition_summary) : null,
                         checkedItems.length > 0
-                          ? `Checked parts:\n${checkedItems
+                          ? `${t.summaryCheckedParts}\n${checkedItems
                               .map((p) => `- ${p.part_name}${p.price ? ` (${p.price})` : ""}`)
                               .join("\n")}`
                           : null,
-                        `Build total: €${total.toLocaleString()}`,
+                        t.summaryBuildTotal(nf(total)),
                         price !== null && dataParts.some((p) => p.price)
-                          ? `Suggested opening offer: €${Math.max(0, price - partsTotal(dataParts)).toLocaleString()}`
+                          ? t.summaryOffer(nf(Math.max(0, price - partsTotal(dataParts))))
                           : null,
                         l.url,
                       ].filter(Boolean);
@@ -1406,7 +1392,7 @@ export default function Home() {
                           onClick={() => copyBuildSummary(lines.join("\n\n"))}
                           className="mt-3 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                         >
-                          {summaryCopied ? "Copied!" : "📋 Copy summary"}
+                          {summaryCopied ? t.copied : t.copySummary}
                         </button>
                       );
                     })()}
@@ -1428,11 +1414,11 @@ export default function Home() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="font-medium text-black dark:text-zinc-50">Compare listings</p>
+                <p className="font-medium text-black dark:text-zinc-50">{t.compareListings}</p>
                 <button
                   type="button"
                   onClick={() => setShowCompare(false)}
-                  aria-label="Close"
+                  aria-label={t.close}
                   className="text-zinc-400 hover:text-black dark:text-zinc-500 dark:hover:text-zinc-50"
                 >
                   ✕
@@ -1470,34 +1456,34 @@ export default function Home() {
                         <p className="mt-2 truncate font-medium text-black dark:text-zinc-50">{l.title}</p>
                         <dl className="mt-1.5 space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
                           <div className="flex justify-between gap-2">
-                            <dt>Price</dt>
+                            <dt>{t.colPrice}</dt>
                             <dd className="text-right">{l.price ?? "—"}</dd>
                           </div>
                           <div className="flex justify-between gap-2">
-                            <dt>Year</dt>
+                            <dt>{t.colYear}</dt>
                             <dd className="text-right">{l.year ?? "—"}</dd>
                           </div>
                           <div className="flex justify-between gap-2">
-                            <dt>Mileage</dt>
+                            <dt>{t.colMileage}</dt>
                             <dd className="text-right">{l.mileage_km ? `${l.mileage_km} km` : "—"}</dd>
                           </div>
                           <div className="flex justify-between gap-2">
-                            <dt>Source</dt>
+                            <dt>{t.colSource}</dt>
                             <dd className="text-right">{l.source}</dd>
                           </div>
                           <div className="flex justify-between gap-2">
-                            <dt>Match</dt>
+                            <dt>{t.colMatch}</dt>
                             <dd className="text-right">
                               {typeof l.match_score === "number" ? `${l.match_score}%` : "—"}
                             </dd>
                           </div>
                           <div className="flex justify-between gap-2">
-                            <dt>Condition</dt>
-                            <dd className="text-right">{v ? VERDICT_LABEL[v.verdict] : "Not checked"}</dd>
+                            <dt>{t.colCondition}</dt>
+                            <dd className="text-right">{v ? t.verdictLabels[v.verdict] : t.notChecked}</dd>
                           </div>
                           <div className="flex justify-between gap-2 font-medium text-black dark:text-zinc-50">
-                            <dt>Build total</dt>
-                            <dd className="text-right">{total !== null ? `€${total.toLocaleString()}` : "—"}</dd>
+                            <dt>{t.colBuildTotal}</dt>
+                            <dd className="text-right">{total !== null ? `${nf(total)} €` : "—"}</dd>
                           </div>
                         </dl>
                         <button
@@ -1508,7 +1494,7 @@ export default function Home() {
                           }}
                           className="mt-2 text-xs font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                         >
-                          Open details
+                          {t.openDetails}
                         </button>
                       </div>
                     );
