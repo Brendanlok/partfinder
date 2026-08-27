@@ -81,6 +81,19 @@ function parseMileage(mileage?: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+// German buyers benchmark a used car against the ~15,000 km/year TÜV average: well
+// below can mean it sat unused for long stretches (or a wound-back odometer), well
+// above means hard use. Pure calc from year + mileage we already have - shown only
+// when both are known and the car is at least a year old.
+function kmPerYear(year?: string, mileage?: string): number | null {
+  const y = Number(year);
+  const km = parseMileage(mileage);
+  if (!Number.isInteger(y) || y < 1950 || km === null || km < 0) return null;
+  const age = new Date().getFullYear() - y;
+  if (age < 1) return null;
+  return Math.round(km / age);
+}
+
 function medianPrice(listings: Listing[]): number | null {
   const prices = listings.map((l) => parsePrice(l.price)).filter((p): p is number => p !== null).sort((a, b) => a - b);
   if (prices.length < 3) return null; // too few results for a comparison to mean anything
@@ -931,6 +944,14 @@ export default function Home() {
                       )}
                       {l.year && <span>{l.year}</span>}
                       {l.mileage_km && <span>{l.mileage_km} km</span>}
+                      {(() => {
+                        const kpy = kmPerYear(l.year, l.mileage_km);
+                        return kpy !== null ? (
+                          <span className="text-zinc-400 dark:text-zinc-600" title={t.kmPerYearTitle}>
+                            {nf(kpy)}{t.perYearSuffix}
+                          </span>
+                        ) : null;
+                      })()}
                       <span className="text-zinc-400 dark:text-zinc-600">{l.source}</span>
                     </div>
                     {duplicates[l.url] && (
@@ -1042,6 +1063,12 @@ export default function Home() {
                   )}
                   {l.year && <span>{l.year}</span>}
                   {l.mileage_km && <span>{l.mileage_km} km</span>}
+                  {(() => {
+                    const kpy = kmPerYear(l.year, l.mileage_km);
+                    return kpy !== null ? (
+                      <span title={t.kmPerYearTitle}>{nf(kpy)}{t.perYearSuffix}</span>
+                    ) : null;
+                  })()}
                   {l.location && <span>{l.location}</span>}
                   <span className="text-zinc-400 dark:text-zinc-600">
                     {l.source}

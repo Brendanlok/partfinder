@@ -48,6 +48,8 @@ type Dict = {
   priceBelow: string;
   priceAbove: string;
   priceBadgeTitle: string;
+  perYearSuffix: string; // " km/yr" / " km/Jahr"
+  kmPerYearTitle: string;
   saveListing: string;
   removeFromSaved: string;
   compare: string;
@@ -156,6 +158,8 @@ export const translations: Record<Lang, Dict> = {
     priceBelow: "Below others found",
     priceAbove: "Above others found",
     priceBadgeTitle: "Compared to other results in this search, not full market data",
+    perYearSuffix: " km/yr",
+    kmPerYearTitle: "Average distance per year - the German TÜV benchmark is about 15,000 km/yr",
     saveListing: "Save listing",
     removeFromSaved: "Remove from saved",
     compare: "Compare",
@@ -274,6 +278,8 @@ export const translations: Record<Lang, Dict> = {
     priceBelow: "Günstiger als andere",
     priceAbove: "Teurer als andere",
     priceBadgeTitle: "Im Vergleich zu anderen Ergebnissen dieser Suche, keine vollständigen Marktdaten",
+    perYearSuffix: " km/Jahr",
+    kmPerYearTitle: "Durchschnittliche Fahrleistung pro Jahr - der TÜV-Richtwert liegt bei etwa 15.000 km/Jahr",
     saveListing: "Anzeige merken",
     removeFromSaved: "Aus Merkliste entfernen",
     compare: "Vergleichen",
