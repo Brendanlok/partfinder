@@ -6,6 +6,7 @@ import { monthlyPayment } from "@/lib/finance";
 import { draftNegotiationMessage } from "@/lib/negotiation";
 import { translations, LANG_KEY, type Lang } from "@/lib/translations";
 import { parsePrice } from "@/lib/price";
+import { cleanMatchTags } from "@/lib/matchTags";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
 // lib (still non-standard/prefixed in some browsers), so type it loosely ourselves.
@@ -428,7 +429,10 @@ export default function Home() {
         if (saved) {
           const { want: savedWant, listings: savedListings } = JSON.parse(saved);
           if (savedWant) setWant(savedWant);
-          if (Array.isArray(savedListings)) setListings(savedListings);
+          if (Array.isArray(savedListings))
+            setListings(
+              savedListings.map((l: Listing) => ({ ...l, match_tags: cleanMatchTags(l.match_tags) }))
+            );
         }
       } catch {
         // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
@@ -583,7 +587,7 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong.");
       const taggedListings = Array.isArray(data.listings)
-        ? data.listings.map((l: Listing) => ({ ...l, want }))
+        ? data.listings.map((l: Listing) => ({ ...l, want, match_tags: cleanMatchTags(l.match_tags) }))
         : data.listings;
       setListings(taggedListings);
       try {
