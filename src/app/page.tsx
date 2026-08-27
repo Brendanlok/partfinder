@@ -308,6 +308,19 @@ export default function Home() {
     });
   }
 
+  // The parts the user actually ticked for a listing (fetched + custom), keyed the same
+  // way everywhere - so the modal's "Your build" and the compare view's "Build total"
+  // never disagree on the same car.
+  function checkedItemsFor(url: string): (PartEstimate | CustomPart)[] {
+    const dataParts = parts[url]?.data ?? [];
+    const all: (PartEstimate | CustomPart)[] = [...dataParts, ...(customParts[url] ?? [])];
+    return all.filter((p, i) =>
+      checkedParts.has(
+        i < dataParts.length ? `${url}::data::${i}` : `${url}::custom::${(p as CustomPart).id}`
+      )
+    );
+  }
+
   // Puts the current search text in the URL (?q=...) and copies it - a link a friend
   // opens loads straight into the search box (see the load-restore effect above),
   // no server round-trip or saved-search state needed for that to work.
@@ -948,7 +961,7 @@ export default function Home() {
           // their own id - part_name alone isn't unique (two parts can share a name).
           const partKey = (p: PartEstimate | CustomPart, i: number) =>
             i < dataParts.length ? `${l.url}::data::${i}` : `${l.url}::custom::${(p as CustomPart).id}`;
-          const checkedItems = allParts.filter((p, i) => checkedParts.has(partKey(p, i)));
+          const checkedItems = checkedItemsFor(l.url);
           return (
           <div
             className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 py-10 sm:items-center"
@@ -1433,12 +1446,14 @@ export default function Home() {
                     const l = saved[url];
                     if (!l) return null;
                     const v = verdicts[url]?.data;
-                    const cmpParts = parts[url]?.data ?? [];
                     const cmpPrice = parsePrice(l.price);
+                    const cmpChecked = checkedItemsFor(url);
+                    // Same number as the detail modal's "Your build" - car price plus only
+                    // the parts actually ticked, not every part that came back.
                     const total =
-                      cmpParts.length > 0
-                        ? buildTotal(cmpPrice, cmpParts.filter((p) => p.price))
-                        : cmpPrice;
+                      cmpPrice === null && cmpChecked.length === 0
+                        ? null
+                        : buildTotal(cmpPrice, cmpChecked);
                     return (
                       <div
                         key={url}
