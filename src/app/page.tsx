@@ -605,6 +605,17 @@ export default function Home() {
   const selectedListing =
     listings?.find((l) => l.url === selectedUrl) ?? (selectedUrl ? saved[selectedUrl] : undefined) ?? null;
   const availableSources = displayedListings ? [...new Set(displayedListings.map((l) => l.source))] : [];
+  // Only offer a sort the current results can actually act on - listings often come back
+  // with no year/mileage (autoscout24 snippets are thin), and an option that silently
+  // does nothing when picked just looks broken.
+  const availableSortOptions = SORT_OPTIONS.filter((opt) => {
+    const ls = displayedListings ?? [];
+    if (opt === "price_asc" || opt === "price_desc") return ls.some((l) => parsePrice(l.price) !== null);
+    if (opt === "year_desc") return ls.some((l) => /^(19|20)\d{2}$/.test((l.year ?? "").trim()));
+    if (opt === "mileage_asc") return ls.some((l) => parseMileage(l.mileage_km) !== null);
+    return true; // relevance
+  });
+  const effectiveSort = availableSortOptions.includes(sortBy) ? sortBy : "relevance";
   const filteredListings = displayedListings
     ? displayedListings.filter((l) => {
         if (sourceFilter.has(l.source)) return false;
@@ -616,7 +627,7 @@ export default function Home() {
         return true;
       })
     : [];
-  const sortedAndFilteredListings = sortListings(filteredListings, sortBy);
+  const sortedAndFilteredListings = sortListings(filteredListings, effectiveSort);
   // Median (for the below/above-market badge) is over the full result set, not the
   // price-filtered view - the badge means "cheap for this kind of car", so a min/max
   // price filter shouldn't recalibrate it (a €5k car under a €5-8k filter is still a
@@ -771,11 +782,11 @@ export default function Home() {
           <>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <select
-                value={sortBy}
+                value={effectiveSort}
                 onChange={(e) => setSortBy(e.target.value as SortOption)}
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               >
-                {SORT_OPTIONS.map((opt) => (
+                {availableSortOptions.map((opt) => (
                   <option key={opt} value={opt}>
                     {t.sortLabels[opt]}
                   </option>
