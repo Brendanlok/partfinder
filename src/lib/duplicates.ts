@@ -2,6 +2,11 @@
 // (mobile.de / AutoScout24 / Kleinanzeigen at different prices). Pure, no
 // React/JSX so it can be unit-tested and imported from page.tsx alike.
 
+// Share the one price parser with page.tsx - a local digits-only copy here
+// mis-parsed any car price written with cents ("12.500,00 €" -> 1250000), which
+// silently broke the 30%-tolerance same-car check and the cheapest-match sort.
+import { parsePrice } from "./price.ts";
+
 export type DupListing = {
   url: string;
   title: string;
@@ -13,12 +18,6 @@ export type DupListing = {
 };
 
 export type DuplicateMatch = { url: string; source: string; price?: string };
-
-export function parsePrice(price?: string): number | null {
-  if (!price) return null;
-  const digits = price.replace(/[^\d]/g, "");
-  return digits ? Number(digits) : null;
-}
 
 export function parseMileage(mileage?: string): number | null {
   if (mileage === undefined) return null;

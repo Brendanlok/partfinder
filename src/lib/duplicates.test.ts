@@ -45,6 +45,17 @@ assert.strictEqual(
   "title overlap alone (no shared year/mileage) should not match"
 );
 
+// One price written with cents ("18.900,00 €") must still parse to ~18900, not 1890000,
+// or the 30%-tolerance same-car check would reject an obvious cross-post.
+assert.strictEqual(
+  isProbablySameCar(
+    { url: "a", title: "BMW E46 M3 Coupe", source: "mobile.de", price: "18.500 €", year: "2004", mileage_km: "120000" },
+    { url: "b", title: "BMW E46 M3 Coupe", source: "AutoScout24", price: "18.900,00 €", year: "2004", mileage_km: "120300" }
+  ),
+  true,
+  "cents-formatted price should not blow up the price-tolerance check"
+);
+
 // findDuplicates wires both directions and dedupe summary picks the cheapest match.
 const listings = [
   { url: "a", title: "BMW E46 M3 Coupe", source: "mobile.de", price: "€19,500", year: "2004", mileage_km: "120000" },
