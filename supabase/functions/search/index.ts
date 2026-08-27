@@ -296,7 +296,11 @@ async function handleSearch(want: string): Promise<Response> {
   const bestByUrl = new Map<string, Record<string, unknown>>();
   for (const l of listings) {
     const url = typeof l.url === "string" ? l.url : null;
-    if (!url) continue;
+    // ponytail: only keep listings whose URL is one we actually sent Gemini. A leaked/
+    // echoed/reworded url string (same failure class the field-cleaning above guards
+    // against) otherwise reaches the UI as a dead card - and a malformed one makes
+    // sourceFromUrl's new URL() throw, failing the whole search with "Search failed".
+    if (!url || !seenUrls.has(url)) continue;
     const existing = bestByUrl.get(url);
     if (!existing || ((l.match_score as number) ?? 0) > ((existing.match_score as number) ?? 0)) {
       bestByUrl.set(url, l);
