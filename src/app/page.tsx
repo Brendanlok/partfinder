@@ -594,7 +594,11 @@ export default function Home() {
       })
     : [];
   const sortedAndFilteredListings = sortListings(filteredListings, sortBy);
-  const median = medianPrice(filteredListings);
+  // Median (for the below/above-market badge) is over the full result set, not the
+  // price-filtered view - the badge means "cheap for this kind of car", so a min/max
+  // price filter shouldn't recalibrate it (a €5k car under a €5-8k filter is still a
+  // below-market car). Same principle as the duplicates note below.
+  const median = medianPrice(displayedListings ?? []);
   // Duplicates are computed over everything fetched/saved, not just the filtered/sorted
   // view - a source hidden by the filter checkboxes can still be the cheaper match worth
   // surfacing on the listing that IS shown.
