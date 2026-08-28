@@ -208,6 +208,11 @@ export default function Home() {
   // Every nf() call is a euro amount shown to the user - round to whole euros so a
   // part price with cents (129,95 €) doesn't drag decimals into the build/offer totals.
   const nf = (n: number) => Math.round(n).toLocaleString(lang === "de" ? "de-DE" : "en-US");
+  // The search function now hands back mileage as bare digits ("85000"). Show it with
+  // thousands separators so a 6-digit odometer reads at a glance. Older cached listings
+  // stored it pre-formatted ("85.000") - leave any non-all-digits value untouched.
+  const fmtKm = (km: string) =>
+    /^\d+$/.test(km) ? Number(km).toLocaleString(lang === "de" ? "de-DE" : "en-US") : km;
   const [want, setWant] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -989,7 +994,7 @@ export default function Home() {
                         </span>
                       )}
                       {l.year && <span>{l.year}</span>}
-                      {l.mileage_km && <span>{l.mileage_km} km</span>}
+                      {l.mileage_km && <span>{fmtKm(l.mileage_km)} km</span>}
                       {l.fuel && <span>{l.fuel}</span>}
                       {(() => {
                         const kpy = kmPerYear(l.year, l.mileage_km);
@@ -1109,7 +1114,7 @@ export default function Home() {
                     </span>
                   )}
                   {l.year && <span>{l.year}</span>}
-                  {l.mileage_km && <span>{l.mileage_km} km</span>}
+                  {l.mileage_km && <span>{fmtKm(l.mileage_km)} km</span>}
                   {l.fuel && <span>{l.fuel}</span>}
                   {(() => {
                     const kpy = kmPerYear(l.year, l.mileage_km);
@@ -1463,7 +1468,7 @@ export default function Home() {
                       const total = buildTotal(price, checkedItems);
                       const lines = [
                         l.title,
-                        [l.price, l.year, l.mileage_km ? `${l.mileage_km} km` : null, l.fuel].filter(Boolean).join(" · "),
+                        [l.price, l.year, l.mileage_km ? `${fmtKm(l.mileage_km)} km` : null, l.fuel].filter(Boolean).join(" · "),
                         data ? t.summaryConditionLine(t.verdictLabels[data.verdict], data.condition_summary) : null,
                         checkedItems.length > 0
                           ? `${t.summaryCheckedParts}\n${checkedItems
@@ -1556,7 +1561,7 @@ export default function Home() {
                           </div>
                           <div className="flex justify-between gap-2">
                             <dt>{t.colMileage}</dt>
-                            <dd className="text-right">{l.mileage_km ? `${l.mileage_km} km` : "—"}</dd>
+                            <dd className="text-right">{l.mileage_km ? `${fmtKm(l.mileage_km)} km` : "—"}</dd>
                           </div>
                           <div className="flex justify-between gap-2">
                             <dt>{t.colFuel}</dt>
