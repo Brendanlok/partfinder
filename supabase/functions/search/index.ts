@@ -277,6 +277,9 @@ async function handleSearch(want: string): Promise<Response> {
   // (e.g. year: "year"), defaults price/mileage to "0" when it's actually unknown, or
   // (still, even after the retry above) leaks reasoning text into a field - none of those
   // are a real value, so strip all three before they hit the UI.
+  // Also the literal "null"/"n/a"/"-" string when a field is genuinely absent - year/mileage
+  // dodged this via their shape check, but fuel (free-text) surfaced a "null" filter chip live.
+  const NON_VALUES = new Set(["null", "n/a", "na", "-", "–", "—", "unknown", "none", "keine angabe"]);
   const listings = result.listings.map((l: Record<string, unknown>) => {
     const clean = { ...l };
     for (const key of OPTIONAL_FIELDS) {
@@ -289,7 +292,7 @@ async function handleSearch(want: string): Promise<Response> {
       // otherwise squeeze leaked reasoning text under the limit
       const isLeakedField = original.length > MAX_FIELD_LEN;
       const isBadShape = isWrongShape(key, raw);
-      if (v === key || isZero || isLeakedField || isBadShape) delete clean[key];
+      if (v === key || v === "" || NON_VALUES.has(v) || isZero || isLeakedField || isBadShape) delete clean[key];
       else clean[key] = raw;
     }
     // clamp in case Gemini strays outside the 0-100 range it was asked for
