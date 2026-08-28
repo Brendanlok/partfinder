@@ -51,6 +51,28 @@ async function crawlForListingUrls(hubUrl: string): Promise<string[]> {
   }
 }
 
+// kleinanzeigen: price is in <h2 id="viewad-price">, the rest in a <ul> of
+// "<label><span class="addetailslist--detail--value">value</span>" rows, and the
+// town in <span ... itemprop="addressLocality">. Join whatever's present into one
+// line so the existing Gemini extraction (handles "130.990 km", "August 2005") works.
+function kleinanzeigenSpecLine(html: string): string {
+  const parts: string[] = [];
+  const price = html.match(/id="viewad-price">\s*([^<]+?)\s*</)?.[1];
+  if (price) parts.push(price);
+  for (const m of html.matchAll(
+    /addetailslist--detail">\s*([^<]+?)<span class="addetailslist--detail--value"[^>]*>\s*([^<]+?)\s*<\/span>/g
+  )) {
+    const label = m[1].trim();
+    // "HU bis August 2028" is a competing 4-digit year - drop it so Gemini's
+    // year extraction only sees the registration year.
+    if (label.startsWith("HU")) continue;
+    parts.push(`${label === "Erstzulassung" ? "EZ" : label} ${m[2].trim()}`);
+  }
+  const loc = html.match(/itemprop="addressLocality">\s*([^<]+?)\s*</)?.[1];
+  if (loc) parts.push(loc);
+  return parts.join(" | ");
+}
+
 // Real title/description straight from the ad page's meta tags, not an LLM guess -
 // keeps the crawl fallback as fabrication-proof as the direct-hit path.
 async function fetchListingSnippet(url: string): Promise<{ title: string; content: string; image: string | null } | null> {
@@ -64,7 +86,11 @@ async function fetchListingSnippet(url: string): Promise<{ title: string; conten
     // reach Gemini regardless of which site the ad is from.
     const ogDesc = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/)?.[1] ?? "";
     const metaDesc = html.match(/<meta[^>]+name="description"[^>]+content="([^"]*)"/)?.[1] ?? "";
-    const content = [metaDesc, ogDesc].filter(Boolean).join(" ").trim();
+    // kleinanzeigen ad pages carry no og/meta description at all - price, mileage, year,
+    // fuel and location only live in the on-page price node + spec list, so pull those
+    // directly and hand Gemini a pipe-delimited line like autoscout24's meta description.
+    const kleinDesc = new URL(url).hostname.endsWith("kleinanzeigen.de") ? kleinanzeigenSpecLine(html) : "";
+    const content = [metaDesc, ogDesc, kleinDesc].filter(Boolean).join(" ").trim();
     const image = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/)?.[1] ?? null;
     return title ? { title, content, image } : null;
   } catch {
