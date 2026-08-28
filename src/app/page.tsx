@@ -213,6 +213,14 @@ export default function Home() {
   // stored it pre-formatted ("85.000") - leave any non-all-digits value untouched.
   const fmtKm = (km: string) =>
     /^\d+$/.test(km) ? Number(km).toLocaleString(lang === "de" ? "de-DE" : "en-US") : km;
+  // Gemini hands back the price field inconsistently - sometimes "29.500 €", sometimes a
+  // bare "29500". When it's just a number (optionally with € / separators) render a clean
+  // "29.500 €" in the user's locale; anything with other words ("VB 5.000", "5.000 € VB")
+  // passes through untouched so no real info is lost.
+  const fmtPrice = (price: string) => {
+    const n = parsePrice(price);
+    return n !== null && /^[\s€.,\d]+$/.test(price) ? `${nf(n)} €` : price;
+  };
   const [want, setWant] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -987,7 +995,7 @@ export default function Home() {
                       </div>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
-                      {l.price && <span>{l.price}</span>}
+                      {l.price && <span>{fmtPrice(l.price)}</span>}
                       {badge && (
                         <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
                           {badge === "below" ? t.priceBelow : t.priceAbove}
@@ -1102,7 +1110,7 @@ export default function Home() {
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                   {l.price && (
                     <span>
-                      {l.price}
+                      {fmtPrice(l.price)}
                     </span>
                   )}
                   {badge && (
@@ -1140,7 +1148,7 @@ export default function Home() {
                           rel="noopener noreferrer"
                           className="underline decoration-zinc-400 underline-offset-2"
                         >
-                          {m.source}{m.price ? ` (${m.price})` : ""}
+                          {m.source}{m.price ? ` (${fmtPrice(m.price)})` : ""}
                         </a>
                       </span>
                     ))}
@@ -1468,7 +1476,7 @@ export default function Home() {
                       const total = buildTotal(price, checkedItems);
                       const lines = [
                         l.title,
-                        [l.price, l.year, l.mileage_km ? `${fmtKm(l.mileage_km)} km` : null, l.fuel].filter(Boolean).join(" · "),
+                        [l.price ? fmtPrice(l.price) : null, l.year, l.mileage_km ? `${fmtKm(l.mileage_km)} km` : null, l.fuel].filter(Boolean).join(" · "),
                         data ? t.summaryConditionLine(t.verdictLabels[data.verdict], data.condition_summary) : null,
                         checkedItems.length > 0
                           ? `${t.summaryCheckedParts}\n${checkedItems
@@ -1553,7 +1561,7 @@ export default function Home() {
                         <dl className="mt-1.5 space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
                           <div className="flex justify-between gap-2">
                             <dt>{t.colPrice}</dt>
-                            <dd className="text-right">{l.price ?? "—"}</dd>
+                            <dd className="text-right">{l.price ? fmtPrice(l.price) : "—"}</dd>
                           </div>
                           <div className="flex justify-between gap-2">
                             <dt>{t.colYear}</dt>
