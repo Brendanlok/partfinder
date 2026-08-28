@@ -7,6 +7,7 @@ import { draftNegotiationMessage } from "@/lib/negotiation";
 import { translations, LANG_KEY, type Lang } from "@/lib/translations";
 import { parsePrice } from "@/lib/price";
 import { parseMileage } from "@/lib/mileage";
+import { pushRecentSearch } from "@/lib/recentSearches";
 import { cleanMatchTags } from "@/lib/matchTags";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
@@ -192,6 +193,7 @@ type VerdictState = {
 };
 
 const LAST_SEARCH_KEY = "partfinder:lastSearch";
+const RECENT_SEARCHES_KEY = "partfinder:recentSearches";
 const SAVED_KEY = "partfinder:saved";
 const MAX_COMPARE = 3;
 
@@ -255,6 +257,7 @@ export default function Home() {
   // the most recent one) - keyed by url so toggling is O(1) and re-saving is a no-op.
   const [saved, setSaved] = useState<Record<string, Listing>>({});
   const [showSaved, setShowSaved] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   // Compare only makes sense within the curated Saved list, not live search results -
   // capped at 3 so the comparison strip stays readable on a phone screen.
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
@@ -463,6 +466,13 @@ export default function Home() {
     } catch {
       // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
     }
+    try {
+      const rawRecent = localStorage.getItem(RECENT_SEARCHES_KEY);
+      const parsed = rawRecent ? JSON.parse(rawRecent) : [];
+      if (Array.isArray(parsed)) setRecentSearches(parsed.filter((s): s is string => typeof s === "string"));
+    } catch {
+      // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
+    }
   }, []);
 
   useEffect(() => {
@@ -610,8 +620,11 @@ export default function Home() {
         ? data.listings.map((l: Listing) => ({ ...l, want, match_tags: cleanMatchTags(l.match_tags) }))
         : data.listings;
       setListings(taggedListings);
+      const nextRecent = pushRecentSearch(recentSearches, want);
+      setRecentSearches(nextRecent);
       try {
         localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify({ want, listings: taggedListings }));
+        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(nextRecent));
       } catch {
         // ponytail: storage full/unavailable, non-critical
       }
@@ -782,23 +795,37 @@ export default function Home() {
           </button>
         </div>
 
-        {!showSaved && !displayedListings && !loading && (
-          // First-load empty state only (never searched yet) - lowers the barrier for a
-          // first-time visitor. Fills the box rather than auto-searching, so a stray tap
-          // doesn't spend a real Tavily search - same reasoning as the shared-search-link restore.
-          <div className="mt-4 flex flex-wrap gap-2">
-            {t.exampleSearches.map((ex) => (
-              <button
-                key={ex}
-                type="button"
-                onClick={() => setWant(ex)}
-                className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-500 hover:text-black dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
-              >
-                {ex}
-              </button>
-            ))}
-          </div>
-        )}
+        {(() => {
+          if (showSaved || loading) return null;
+          const recentToShow = recentSearches.filter(
+            (s) => s.toLowerCase() !== want.trim().toLowerCase()
+          );
+          // Prefer the user's own recent queries once they have any - lets someone
+          // comparing several cars jump back to an earlier search without retyping,
+          // even after new results have replaced it on screen. Fall back to the
+          // example prompts only on a truly fresh visit. Both fill the box rather
+          // than auto-searching, so a stray tap never spends a real Tavily search.
+          const useRecent = recentToShow.length > 0;
+          const chips = useRecent ? recentToShow : displayedListings ? [] : t.exampleSearches;
+          if (chips.length === 0) return null;
+          return (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {useRecent && (
+                <span className="text-xs text-zinc-400 dark:text-zinc-600">{t.recentSearches}:</span>
+              )}
+              {chips.map((ex) => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => setWant(ex)}
+                  className="rounded-full border border-zinc-300 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-500 hover:text-black dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         {loading && !showSaved && (
           <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">

@@ -24,6 +24,7 @@ type Dict = {
   search: string;
   searching: string;
   exampleSearches: readonly string[];
+  recentSearches: string;
   statusMessages: readonly string[];
   noSavedListings: string;
   noMatchingListings: string;
@@ -127,6 +128,7 @@ export const translations: Record<Lang, Dict> = {
       "VW Golf GTI Mk7, under 80k km",
       "Diesel estate, good condition, under 15k",
     ],
+    recentSearches: "Recent",
     statusMessages: [
       "Searching mobile.de, AutoScout24 & Kleinanzeigen…",
       "Reading listings…",
@@ -248,6 +250,7 @@ export const translations: Record<Lang, Dict> = {
       "VW Golf GTI Mk7, unter 80.000 km",
       "Diesel-Kombi, guter Zustand, unter 15.000 €",
     ],
+    recentSearches: "Zuletzt gesucht",
     statusMessages: [
       "Durchsuche mobile.de, AutoScout24 & Kleinanzeigen…",
       "Lese Anzeigen…",
