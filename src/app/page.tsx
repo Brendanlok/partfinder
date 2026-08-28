@@ -848,7 +848,10 @@ export default function Home() {
                 placeholder={t.maxPricePlaceholder}
                 className="w-28 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               />
-              {availableSources.map((s) => (
+              {/* One lone source/fuel checkbox can't filter anything (unchecking it just
+                  hides every result) - only offer these when there's an actual choice,
+                  same reasoning as availableSortOptions above. */}
+              {availableSources.length > 1 && availableSources.map((s) => (
                 <label key={s} className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
                   <input
                     type="checkbox"
@@ -859,7 +862,7 @@ export default function Home() {
                   {s}
                 </label>
               ))}
-              {availableFuels.map((f) => (
+              {availableFuels.length > 1 && availableFuels.map((f) => (
                 <label key={f} className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
                   <input
                     type="checkbox"
