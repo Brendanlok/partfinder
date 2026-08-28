@@ -1026,6 +1026,7 @@ export default function Home() {
                           </span>
                         ) : null;
                       })()}
+                      {l.location && <span>📍 {l.location}</span>}
                       <span className="text-zinc-400 dark:text-zinc-600">{l.source}</span>
                     </div>
                     {duplicates[l.url] && (
@@ -1490,7 +1491,7 @@ export default function Home() {
                       const total = buildTotal(price, checkedItems);
                       const lines = [
                         l.title,
-                        [l.price ? fmtPrice(l.price) : null, l.year, l.mileage_km ? `${fmtKm(l.mileage_km)} km` : null, l.fuel].filter(Boolean).join(" · "),
+                        [l.price ? fmtPrice(l.price) : null, l.year, l.mileage_km ? `${fmtKm(l.mileage_km)} km` : null, l.fuel, l.location].filter(Boolean).join(" · "),
                         data ? t.summaryConditionLine(t.verdictLabels[data.verdict], data.condition_summary) : null,
                         checkedItems.length > 0
                           ? `${t.summaryCheckedParts}\n${checkedItems
