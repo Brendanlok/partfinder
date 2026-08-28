@@ -78,9 +78,13 @@ function sortListings(listings: Listing[], sortBy: SortOption): Listing[] {
 }
 
 function parseMileage(mileage?: string): number | null {
-  if (mileage === undefined) return null;
-  const n = Number(mileage);
-  return Number.isNaN(n) ? null : n;
+  if (!mileage) return null;
+  // New listings arrive as bare digits, but listings saved to localStorage before that
+  // change stored the German-formatted value ("85.000 km") - Number("85.000") is 85, which
+  // sorted an 85k-km car as if it had 85 km and threw kmPerYear off by ~1000x. Strip the
+  // grouping separators / unit first, same as fmtKm handles the display side.
+  const n = Number(mileage.replace(/km/gi, "").replace(/[.,\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
 }
 
 // German buyers benchmark a used car against the ~15,000 km/year TÜV average: well
