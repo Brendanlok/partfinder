@@ -6,6 +6,7 @@
 // mis-parsed any car price written with cents ("12.500,00 €" -> 1250000), which
 // silently broke the 30%-tolerance same-car check and the cheapest-match sort.
 import { parsePrice } from "./price.ts";
+import { parseMileage } from "./mileage.ts";
 
 export type DupListing = {
   url: string;
@@ -18,12 +19,6 @@ export type DupListing = {
 };
 
 export type DuplicateMatch = { url: string; source: string; price?: string };
-
-export function parseMileage(mileage?: string): number | null {
-  if (mileage === undefined) return null;
-  const n = Number(mileage);
-  return Number.isNaN(n) ? null : n;
-}
 
 function titleWords(title: string): Set<string> {
   return new Set(

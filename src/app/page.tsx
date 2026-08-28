@@ -6,6 +6,7 @@ import { monthlyPayment } from "@/lib/finance";
 import { draftNegotiationMessage } from "@/lib/negotiation";
 import { translations, LANG_KEY, type Lang } from "@/lib/translations";
 import { parsePrice } from "@/lib/price";
+import { parseMileage } from "@/lib/mileage";
 import { cleanMatchTags } from "@/lib/matchTags";
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
@@ -75,16 +76,6 @@ function sortListings(listings: Listing[], sortBy: SortOption): Listing[] {
       sorted.sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1));
   }
   return sorted;
-}
-
-function parseMileage(mileage?: string): number | null {
-  if (!mileage) return null;
-  // New listings arrive as bare digits, but listings saved to localStorage before that
-  // change stored the German-formatted value ("85.000 km") - Number("85.000") is 85, which
-  // sorted an 85k-km car as if it had 85 km and threw kmPerYear off by ~1000x. Strip the
-  // grouping separators / unit first, same as fmtKm handles the display side.
-  const n = Number(mileage.replace(/km/gi, "").replace(/[.,\s]/g, ""));
-  return Number.isFinite(n) ? n : null;
 }
 
 // German buyers benchmark a used car against the ~15,000 km/year TÜV average: well
