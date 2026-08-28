@@ -427,6 +427,13 @@ export default function Home() {
     }
   }, []);
 
+  // Keep <html lang> in sync with the toggle - the static export ships lang="en",
+  // so a German user's screen reader would otherwise read the German UI with English
+  // pronunciation rules. Covers both the toggle and the localStorage-restore above.
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   function toggleLang() {
     setLang((prev) => {
       const next = prev === "en" ? "de" : "en";
