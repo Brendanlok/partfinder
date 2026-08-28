@@ -101,6 +101,7 @@ type Dict = {
   colPrice: string;
   colYear: string;
   colMileage: string;
+  colFuel: string;
   colSource: string;
   colMatch: string;
   colCondition: string;
@@ -223,6 +224,7 @@ export const translations: Record<Lang, Dict> = {
     colPrice: "Price",
     colYear: "Year",
     colMileage: "Mileage",
+    colFuel: "Fuel",
     colSource: "Source",
     colMatch: "Match",
     colCondition: "Condition",
@@ -343,6 +345,7 @@ export const translations: Record<Lang, Dict> = {
     colPrice: "Preis",
     colYear: "Baujahr",
     colMileage: "Laufleistung",
+    colFuel: "Kraftstoff",
     colSource: "Quelle",
     colMatch: "Treffer",
     colCondition: "Zustand",

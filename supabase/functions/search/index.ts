@@ -173,7 +173,7 @@ async function handleSearch(want: string): Promise<Response> {
   // tell that responseSchema mode broke down (confirmed live: Gemini once dumped its
   // reasoning for 8 listings into a single "year" field, syntactically valid JSON so the
   // existing parse check didn't catch it).
-  const OPTIONAL_FIELDS = ["price", "year", "mileage_km", "location"];
+  const OPTIONAL_FIELDS = ["price", "year", "mileage_km", "location", "fuel"];
   const MAX_FIELD_LEN = 40;
   const isLeaked = (listings: Record<string, unknown>[]) =>
     listings.some((l) =>
@@ -217,7 +217,7 @@ async function handleSearch(want: string): Promise<Response> {
                       url: r.url,
                       snippet: r.content,
                     }))
-                  )}\n\nReturn exactly one listing entry per raw result URL above (skip an entry only if it's a generic article/guide with no specific car for sale, or plainly doesn't match what the user wants) - never invent a second or third car out of one URL's title/snippet, and never reuse one URL under a different car's specs. Use that URL's own title/snippet only for its entry. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year (the 4-digit first-registration year - e.g. from "EZ 03/2018" return "2018" - or null if not shown), mileage_km (a km distance as digits only, no "km" suffix, no German thousands separators so "85.000 km" becomes "85000", and never a price - or null if not shown), location, source site. Each field must be the short raw value only - never explanations or reasoning. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Each tag must be a finished descriptive phrase - never a status word like "unconfirmed", "unmerged", "unknown" or "n/a"; if you can't confirm something, just leave that tag out. Return JSON only.`,
+                  )}\n\nReturn exactly one listing entry per raw result URL above (skip an entry only if it's a generic article/guide with no specific car for sale, or plainly doesn't match what the user wants) - never invent a second or third car out of one URL's title/snippet, and never reuse one URL under a different car's specs. Use that URL's own title/snippet only for its entry. Extract what's visible: title, price (a EUR amount - never a distance - or null if not shown), year (the 4-digit first-registration year - e.g. from "EZ 03/2018" return "2018" - or null if not shown), mileage_km (a km distance as digits only, no "km" suffix, no German thousands separators so "85.000 km" becomes "85000", and never a price - or null if not shown), fuel (the fuel type exactly as shown in the ad - e.g. "Benzin", "Diesel", "Elektro", "Hybrid", "Autogas" - or null if not shown), location, source site. Each field must be the short raw value only - never explanations or reasoning. Also rate match_score 0-100 for how well this specific listing fits what the user asked for, based only on what's in the title/snippet (spec match, price fit if a budget was mentioned, condition wording) - be honest, don't default to a high score. Give match_tags: 1-4 short tags (2-3 words each) naming the specific reasons, e.g. "Manual gearbox", "Under budget", "High mileage", "Right generation" - whatever is actually true of this listing, positive or negative. Each tag must be a finished descriptive phrase - never a status word like "unconfirmed", "unmerged", "unknown" or "n/a"; if you can't confirm something, just leave that tag out. Return JSON only.`,
                 },
               ],
             },
@@ -237,6 +237,7 @@ async function handleSearch(want: string): Promise<Response> {
                       price: { type: "string" },
                       year: { type: "string" },
                       mileage_km: { type: "string" },
+                      fuel: { type: "string" },
                       location: { type: "string" },
                       source: { type: "string" },
                       match_score: { type: "number" },

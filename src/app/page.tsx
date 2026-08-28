@@ -31,6 +31,7 @@ type Listing = {
   price?: string;
   year?: string;
   mileage_km?: string;
+  fuel?: string;
   location?: string;
   source: string;
   match_score?: number;
@@ -216,6 +217,9 @@ export default function Home() {
   const [statusIndex, setStatusIndex] = useState(0);
   const [sortBy, setSortBy] = useState<SortOption>("relevance");
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
+  // Same excluded-values pattern as sourceFilter - buyers filter hard on fuel type.
+  // Only shown when the current results actually carry a fuel value (autoscout24 snippets do).
+  const [fuelFilter, setFuelFilter] = useState<Set<string>>(new Set());
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   // Off by default - collapsing cross-posted listings is a judgment call (which listing
@@ -571,6 +575,7 @@ export default function Home() {
     setListings(null);
     setSortBy("relevance");
     setSourceFilter(new Set());
+    setFuelFilter(new Set());
     setMinPrice("");
     setMaxPrice("");
     setHideDuplicates(false);
@@ -609,6 +614,9 @@ export default function Home() {
   const selectedListing =
     listings?.find((l) => l.url === selectedUrl) ?? (selectedUrl ? saved[selectedUrl] : undefined) ?? null;
   const availableSources = displayedListings ? [...new Set(displayedListings.map((l) => l.source))] : [];
+  const availableFuels = displayedListings
+    ? [...new Set(displayedListings.map((l) => l.fuel).filter((f): f is string => !!f))]
+    : [];
   // Only offer a sort the current results can actually act on - listings often come back
   // with no year/mileage (autoscout24 snippets are thin), and an option that silently
   // does nothing when picked just looks broken.
@@ -623,6 +631,7 @@ export default function Home() {
   const filteredListings = displayedListings
     ? displayedListings.filter((l) => {
         if (sourceFilter.has(l.source)) return false;
+        if (l.fuel && fuelFilter.has(l.fuel)) return false;
         if (minPrice || maxPrice) {
           const p = parsePrice(l.price);
           if (p !== null && minPrice && p < Number(minPrice)) return false;
@@ -660,6 +669,15 @@ export default function Home() {
     });
   }
 
+  function toggleFuel(fuel: string) {
+    setFuelFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(fuel)) next.delete(fuel);
+      else next.add(fuel);
+      return next;
+    });
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black px-4 py-10 sm:py-16">
       <main className="mx-auto max-w-6xl">
@@ -687,6 +705,7 @@ export default function Home() {
                 // filters left over from a search (e.g. one source unchecked) could
                 // otherwise hide a saved listing with a confusing "no results" message.
                 setSourceFilter(new Set());
+                setFuelFilter(new Set());
                 setMinPrice("");
                 setMaxPrice("");
                 setCompareSet(new Set());
@@ -823,6 +842,17 @@ export default function Home() {
                   {s}
                 </label>
               ))}
+              {availableFuels.map((f) => (
+                <label key={f} className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+                  <input
+                    type="checkbox"
+                    checked={!fuelFilter.has(f)}
+                    onChange={() => toggleFuel(f)}
+                    className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                  />
+                  {f}
+                </label>
+              ))}
               <label
                 className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400"
                 title={t.partsBuildCostTitle}
@@ -867,6 +897,7 @@ export default function Home() {
                   type="button"
                   onClick={() => {
                     setSourceFilter(new Set());
+                    setFuelFilter(new Set());
                     setMinPrice("");
                     setMaxPrice("");
                   }}
@@ -959,6 +990,7 @@ export default function Home() {
                       )}
                       {l.year && <span>{l.year}</span>}
                       {l.mileage_km && <span>{l.mileage_km} km</span>}
+                      {l.fuel && <span>{l.fuel}</span>}
                       {(() => {
                         const kpy = kmPerYear(l.year, l.mileage_km);
                         return kpy !== null ? (
@@ -1078,6 +1110,7 @@ export default function Home() {
                   )}
                   {l.year && <span>{l.year}</span>}
                   {l.mileage_km && <span>{l.mileage_km} km</span>}
+                  {l.fuel && <span>{l.fuel}</span>}
                   {(() => {
                     const kpy = kmPerYear(l.year, l.mileage_km);
                     return kpy !== null ? (
@@ -1430,7 +1463,7 @@ export default function Home() {
                       const total = buildTotal(price, checkedItems);
                       const lines = [
                         l.title,
-                        [l.price, l.year, l.mileage_km ? `${l.mileage_km} km` : null].filter(Boolean).join(" · "),
+                        [l.price, l.year, l.mileage_km ? `${l.mileage_km} km` : null, l.fuel].filter(Boolean).join(" · "),
                         data ? t.summaryConditionLine(t.verdictLabels[data.verdict], data.condition_summary) : null,
                         checkedItems.length > 0
                           ? `${t.summaryCheckedParts}\n${checkedItems
@@ -1524,6 +1557,10 @@ export default function Home() {
                           <div className="flex justify-between gap-2">
                             <dt>{t.colMileage}</dt>
                             <dd className="text-right">{l.mileage_km ? `${l.mileage_km} km` : "—"}</dd>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <dt>{t.colFuel}</dt>
+                            <dd className="text-right">{l.fuel ?? "—"}</dd>
                           </div>
                           <div className="flex justify-between gap-2">
                             <dt>{t.colSource}</dt>
