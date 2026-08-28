@@ -144,8 +144,50 @@ async function handleSearch(want: string): Promise<Response> {
   // judges them as no real match and returns zero - even though the crawl fallback would have
   // found fresh listings from the same hub pages). Merging both (deduped by URL) costs no
   // extra Tavily/Gemini calls, just a few extra plain fetches to the listing sites.
-  const hubUrls = (tavilyData.results ?? []).filter(onListingSite).slice(0, 3).map((r: { url: string }) => r.url);
-  const crawledUrls = [...new Set((await Promise.all(hubUrls.map(crawlForListingUrls))).flat())].slice(0, 8);
+  // ponytail: per-site hub quota, not a flat top-3. Tavily routinely ranks one site's hub
+  // pages above the others, so slice(0,3) then means e.g. kleinanzeigen never gets crawled
+  // at all (confirmed live: "Audi A4" and "VW Golf 7 GTI" both returned autoscout24-only
+  // results because every top hub Tavily surfaced was autoscout24). Give each crawlable
+  // site its own slots so results aren't single-source. Same Tavily response, just a
+  // couple more plain hub fetches.
+  const hubUrls = Object.keys(AD_PATH_PATTERN).flatMap((site) =>
+    (tavilyData.results ?? [])
+      .filter((r: { url: string }) => new URL(r.url).hostname.endsWith(site))
+      .slice(0, 2)
+      .map((r: { url: string }) => r.url)
+  );
+  // ponytail: Tavily's kleinanzeigen coverage is thin - for many car queries it surfaces
+  // zero kleinanzeigen hubs, so the per-site quota above has nothing to crawl. kleinanzeigen's
+  // keyword search has a stable URL shape, so synthesize one and always crawl it. Its search
+  // ANDs every term and matches literally, so feed it only make/model words: the part before
+  // the first comma, minus prices/years/ranges and qualifier words a German ad title won't
+  // contain (confirmed live: the raw ask "VW Golf 7 GTI manual under 20000" returns zero, but
+  // "VW Golf GTI" returns 27). No extra API call; Gemini drops the loose matches downstream.
+  const KLEIN_STOP = new Set(
+    "manual automatic auto petrol gasoline diesel hybrid electric awd 4wd quattro under over below above max min good great excellent mint clean cheap budget around about approx roughly low high mileage miles year years old new from with without and or the near condition"
+      .split(" ")
+  );
+  const kleinKeywords = want
+    .split(",")[0]
+    .split(/\s+/)
+    .filter(
+      (w: string) =>
+        w.length > 1 && /[a-z]/i.test(w) && !/^\d[\d.,k-]*$/i.test(w) && !KLEIN_STOP.has(w.toLowerCase())
+    )
+    .slice(0, 4);
+  if (kleinKeywords.length > 0) {
+    hubUrls.unshift(
+      `https://www.kleinanzeigen.de/s-autos/c216?keywords=${encodeURIComponent(kleinKeywords.join(" "))}`
+    );
+  }
+  // ponytail: interleave hubs (one URL from each before any hub's second), not flat concat -
+  // a flat concat + slice(0,10) let two autoscout24 hubs fill every slot before the
+  // kleinanzeigen hub contributed anything (confirmed live: still autoscout24-only after the
+  // per-site quota alone). Round-robin guarantees every hub reaches Gemini.
+  const perHub = await Promise.all(hubUrls.map(crawlForListingUrls));
+  const interleaved: string[] = [];
+  for (let i = 0; i < 5; i++) for (const urls of perHub) if (urls[i]) interleaved.push(urls[i]);
+  const crawledUrls = [...new Set(interleaved)].slice(0, 12);
   const snippets = await Promise.all(crawledUrls.map(fetchListingSnippet));
   const crawledResults = crawledUrls
     .map((url, i) =>
@@ -279,7 +321,12 @@ async function handleSearch(want: string): Promise<Response> {
   // are a real value, so strip all three before they hit the UI.
   // Also the literal "null"/"n/a"/"-" string when a field is genuinely absent - year/mileage
   // dodged this via their shape check, but fuel (free-text) surfaced a "null" filter chip live.
-  const NON_VALUES = new Set(["null", "n/a", "na", "-", "–", "—", "unknown", "none", "keine angabe"]);
+  const NON_VALUES = new Set(["null", "n/a", "n.a.", "na", "-", "–", "—", "unknown", "none", "keine angabe"]);
+  // Status-y fragments Gemini emits instead of null - same failure class cleanMatchTags
+  // fixes for match_tags client-side, but confirmed live in the price field too
+  // (kleinanzeigen's thin snippets have no price, and Gemini returned price: "unconfirmed"
+  // which then rendered as the card's price). Mirror that word list here.
+  const JUNK_VALUE = /\b(unconfirmed|unverified|unspecified|undetermined|unclear|not shown|not specified|not listed|tbd|pending)\b/i;
   const listings = result.listings.map((l: Record<string, unknown>) => {
     const clean = { ...l };
     for (const key of OPTIONAL_FIELDS) {
@@ -292,7 +339,7 @@ async function handleSearch(want: string): Promise<Response> {
       // otherwise squeeze leaked reasoning text under the limit
       const isLeakedField = original.length > MAX_FIELD_LEN;
       const isBadShape = isWrongShape(key, raw);
-      if (v === key || v === "" || NON_VALUES.has(v) || isZero || isLeakedField || isBadShape) delete clean[key];
+      if (v === key || v === "" || NON_VALUES.has(v) || JUNK_VALUE.test(v) || isZero || isLeakedField || isBadShape) delete clean[key];
       else clean[key] = raw;
     }
     // clamp in case Gemini strays outside the 0-100 range it was asked for
