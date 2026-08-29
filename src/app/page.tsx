@@ -875,6 +875,16 @@ export default function Home() {
     (l, _i, arr) => (l.want ?? "") === (arr[0].want ?? "")
   );
   const median = sameSearch ? medianPrice(displayedListings ?? []) : null;
+  // One-line market context above the grid: the asking-price spread across this search's
+  // results plus the median. Same gate as the badge (same-search only, >=3 priced) so it
+  // never spans unrelated saved cars. Pure calc from prices we already have.
+  const priceSpread = (() => {
+    if (median === null) return null;
+    const prices = (displayedListings ?? [])
+      .map((l) => parsePrice(l.price))
+      .filter((p): p is number => p !== null);
+    return { low: Math.min(...prices), high: Math.max(...prices), median };
+  })();
   // Duplicates are computed over everything fetched/saved, not just the filtered/sorted
   // view - a source hidden by the filter checkboxes can still be the cheaper match worth
   // surfacing on the listing that IS shown.
@@ -1185,6 +1195,12 @@ export default function Home() {
             {sortedListings.length > 0 && sortedListings.length < displayedListings.length && (
               <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                 {t.showingOf(sortedListings.length, displayedListings.length)}
+              </p>
+            )}
+
+            {priceSpread && !mapView && (
+              <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                {t.priceRange(`${nf(priceSpread.low)} €`, `${nf(priceSpread.high)} €`, `${nf(priceSpread.median)} €`)}
               </p>
             )}
 

@@ -40,6 +40,7 @@ type Dict = {
   noResultsFilters: string;
   clearFilters: string;
   showingOf: (shown: number, total: number) => string;
+  priceRange: (low: string, high: string, typical: string) => string;
 
   // Voice input language tag for the Web Speech API
   speechLang: string;
@@ -190,6 +191,7 @@ export const translations: Record<Lang, Dict> = {
     noResultsFilters: "No results match these filters.",
     clearFilters: "Clear filters",
     showingOf: (shown, total) => `Showing ${shown} of ${total} listings`,
+    priceRange: (low, high, typical) => `${low}–${high} · typical ${typical}`,
 
     speechLang: "en-US",
 
@@ -344,6 +346,7 @@ export const translations: Record<Lang, Dict> = {
     noResultsFilters: "Keine Ergebnisse mit diesen Filtern.",
     clearFilters: "Filter zurücksetzen",
     showingOf: (shown, total) => `${shown} von ${total} Anzeigen`,
+    priceRange: (low, high, typical) => `${low}–${high} · üblich ${typical}`,
 
     speechLang: "de-DE",
 
