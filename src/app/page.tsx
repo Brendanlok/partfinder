@@ -211,6 +211,11 @@ type VerdictState = {
 const LAST_SEARCH_KEY = "partfinder:lastSearch";
 const RECENT_SEARCHES_KEY = "partfinder:recentSearches";
 const SAVED_KEY = "partfinder:saved";
+// Which account last synced its saved cars on this browser. Lets sign-in tell "same
+// user, another device" (union local + account) apart from "a different account on
+// this shared browser" (take the account's list, don't union - otherwise the previous
+// user's saved cars leak into, and get pushed up to, the new account).
+const SYNCED_EMAIL_KEY = "partfinder:syncedEmail";
 const MAX_COMPARE = 3;
 
 export default function Home() {
@@ -604,13 +609,26 @@ export default function Home() {
     if (!accountEnabled) return;
     let cancelled = false;
 
-    async function mergeFromAccount() {
+    async function mergeFromAccount(email: string) {
       const remote = await pullSaved();
       if (cancelled || !remote || typeof remote !== "object") return;
+      let prevEmail: string | null = null;
+      try {
+        prevEmail = localStorage.getItem(SYNCED_EMAIL_KEY);
+      } catch {
+        // ponytail: localStorage unavailable, treat as first sync on this browser
+      }
+      // First sync here, or the same account as last time -> union local + account so a
+      // sign-in never drops what this device already had. A different account -> take the
+      // account's list as-is, so one browser's two users don't cross-pollinate saved cars.
+      const sameUser = !prevEmail || prevEmail === email;
       setSaved((local) => {
-        const merged = { ...(remote as Record<string, Listing>), ...local };
+        const merged = sameUser
+          ? { ...(remote as Record<string, Listing>), ...local }
+          : { ...(remote as Record<string, Listing>) };
         try {
           localStorage.setItem(SAVED_KEY, JSON.stringify(merged));
+          localStorage.setItem(SYNCED_EMAIL_KEY, email);
         } catch {
           // ponytail: storage unavailable, in-memory merge still fine for this session
         }
@@ -628,7 +646,7 @@ export default function Home() {
         setShowSync(false);
         setSyncStep("email");
         setSyncCode("");
-        mergeFromAccount();
+        mergeFromAccount(email);
       }
     });
     return () => {
