@@ -109,6 +109,38 @@ type Dict = {
   colBuildTotal: string;
   notChecked: string;
   openDetails: string;
+
+  // Map view
+  map: {
+    showMap: string;
+    showList: string;
+    geocoding: string;
+    noneOnMap: (n: number) => string;
+    openListing: string;
+  };
+
+  // Cross-device sync (optional sign-in)
+  account: {
+    sync: string;
+    syncTitle: string;
+    signedInAs: (email: string) => string;
+    signOut: string;
+    heading: string;
+    blurb: string;
+    emailPlaceholder: string;
+    sendCode: string;
+    codePlaceholder: string;
+    verify: string;
+    sending: string;
+    verifying: string;
+    codeSent: (email: string) => string;
+    badEmail: string;
+    badCode: string;
+    genericError: string;
+    rateLimited: string;
+    synced: string;
+    close: string;
+  };
 };
 
 export const translations: Record<Lang, Dict> = {
@@ -233,6 +265,34 @@ export const translations: Record<Lang, Dict> = {
     colBuildTotal: "Build total",
     notChecked: "Not checked",
     openDetails: "Open details",
+    map: {
+      showMap: "Map",
+      showList: "List",
+      geocoding: "Placing cars on the map…",
+      noneOnMap: (n) => `${n} ${n === 1 ? "car" : "cars"} not shown — no usable location`,
+      openListing: "Open listing",
+    },
+    account: {
+      sync: "Sync",
+      syncTitle: "Sync your saved cars across devices",
+      signedInAs: (email) => `Synced · ${email}`,
+      signOut: "Sign out",
+      heading: "Sync saved cars across devices",
+      blurb: "Your saved cars stay on this device. Sign in with your email to see the same list on your phone and laptop. No password — we email you a code.",
+      emailPlaceholder: "you@email.com",
+      sendCode: "Email me a code",
+      codePlaceholder: "6-digit code",
+      verify: "Verify & sync",
+      sending: "Sending…",
+      verifying: "Verifying…",
+      codeSent: (email) => `Code sent to ${email}. Check your inbox.`,
+      badEmail: "Enter a valid email address.",
+      badCode: "That code didn't work. Check it and try again.",
+      genericError: "Something went wrong. Try again.",
+      rateLimited: "Too many code requests. Wait a minute and try again.",
+      synced: "Saved cars synced.",
+      close: "Close",
+    },
   },
   de: {
     subtitle: "Beschreibe das Auto, das du suchst. Wir durchsuchen mobile.de, AutoScout24 und Kleinanzeigen nach passenden Angeboten.",
@@ -355,5 +415,33 @@ export const translations: Record<Lang, Dict> = {
     colBuildTotal: "Gesamtsumme",
     notChecked: "Nicht geprüft",
     openDetails: "Details öffnen",
+    map: {
+      showMap: "Karte",
+      showList: "Liste",
+      geocoding: "Autos werden auf der Karte platziert…",
+      noneOnMap: (n) => `${n} ${n === 1 ? "Auto" : "Autos"} nicht angezeigt — kein verwertbarer Ort`,
+      openListing: "Anzeige öffnen",
+    },
+    account: {
+      sync: "Sync",
+      syncTitle: "Gespeicherte Autos geräteübergreifend synchronisieren",
+      signedInAs: (email) => `Synchronisiert · ${email}`,
+      signOut: "Abmelden",
+      heading: "Gespeicherte Autos geräteübergreifend synchronisieren",
+      blurb: "Deine gespeicherten Autos bleiben auf diesem Gerät. Melde dich mit deiner E-Mail an, um dieselbe Liste auf Handy und Laptop zu sehen. Kein Passwort — wir schicken dir einen Code per E-Mail.",
+      emailPlaceholder: "du@email.de",
+      sendCode: "Code per E-Mail senden",
+      codePlaceholder: "6-stelliger Code",
+      verify: "Bestätigen & synchronisieren",
+      sending: "Wird gesendet…",
+      verifying: "Wird geprüft…",
+      codeSent: (email) => `Code an ${email} gesendet. Schau in dein Postfach.`,
+      badEmail: "Gib eine gültige E-Mail-Adresse ein.",
+      badCode: "Der Code hat nicht funktioniert. Bitte prüfen und erneut versuchen.",
+      genericError: "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
+      rateLimited: "Zu viele Code-Anfragen. Warte eine Minute und versuche es erneut.",
+      synced: "Gespeicherte Autos synchronisiert.",
+      close: "Schließen",
+    },
   },
 };

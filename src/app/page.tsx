@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { findDuplicates, duplicateSummary, pickRepresentatives, type DuplicateMatch } from "@/lib/duplicates";
 import { monthlyPayment } from "@/lib/finance";
 import { draftNegotiationMessage } from "@/lib/negotiation";
@@ -9,6 +10,20 @@ import { parsePrice } from "@/lib/price";
 import { parseMileage } from "@/lib/mileage";
 import { pushRecentSearch } from "@/lib/recentSearches";
 import { cleanMatchTags } from "@/lib/matchTags";
+import type { MapListing } from "@/components/ListingsMap";
+import {
+  accountEnabled,
+  onAuthChange,
+  sendCode,
+  verifyCode,
+  signOut,
+  pullSaved,
+  pushSaved,
+} from "@/lib/account";
+
+// Leaflet touches `window` on import and this app is a static export, so the map view
+// only ever loads in the browser, on demand when the user switches to it.
+const ListingsMap = dynamic(() => import("@/components/ListingsMap"), { ssr: false });
 
 // Minimal shape of the Web Speech API's SpeechRecognition - not in TS's default DOM
 // lib (still non-standard/prefixed in some browsers), so type it loosely ourselves.
@@ -257,7 +272,18 @@ export default function Home() {
   // the most recent one) - keyed by url so toggling is O(1) and re-saving is a no-op.
   const [saved, setSaved] = useState<Record<string, Listing>>({});
   const [showSaved, setShowSaved] = useState(false);
+  const [mapView, setMapView] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  // Optional cross-device sync. `syncEmail` non-null = signed in. All sync state lives
+  // here; the app is fully usable with this untouched (saved stays in localStorage).
+  const [syncEmail, setSyncEmail] = useState<string | null>(null);
+  const [showSync, setShowSync] = useState(false);
+  const [syncStep, setSyncStep] = useState<"email" | "code">("email");
+  const [syncInputEmail, setSyncInputEmail] = useState("");
+  const [syncCode, setSyncCode] = useState("");
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [syncErr, setSyncErr] = useState("");
   // Compare only makes sense within the curated Saved list, not live search results -
   // capped at 3 so the comparison strip stays readable on a phone screen.
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
@@ -404,8 +430,51 @@ export default function Home() {
       } catch {
         // ponytail: storage full/unavailable, non-critical
       }
+      pushSaved(next); // no-ops when signed out
       return next;
     });
+  }
+
+  async function handleSendCode() {
+    const email = syncInputEmail.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setSyncErr(t.account.badEmail);
+      return;
+    }
+    setSyncBusy(true);
+    setSyncErr("");
+    const { error } = await sendCode(email);
+    setSyncBusy(false);
+    if (error) {
+      setSyncErr(/rate|limit|too many|60 seconds/i.test(error) ? t.account.rateLimited : t.account.genericError);
+      return;
+    }
+    setSyncStep("code");
+    setSyncMsg(t.account.codeSent(email));
+  }
+
+  async function handleVerifyCode() {
+    const code = syncCode.trim();
+    if (code.length < 6) {
+      setSyncErr(t.account.badCode);
+      return;
+    }
+    setSyncBusy(true);
+    setSyncErr("");
+    const { error } = await verifyCode(syncInputEmail.trim(), code);
+    setSyncBusy(false);
+    if (error) {
+      setSyncErr(t.account.badCode);
+      return;
+    }
+    // onAuthChange handles the rest (close panel, merge saved).
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    setSyncEmail(null);
+    setSyncMsg("");
+    setShowSync(false);
   }
 
   // Restore the last successful search on load, so a refresh/back-nav doesn't
@@ -415,9 +484,21 @@ export default function Home() {
   useEffect(() => {
     try {
       const storedLang = localStorage.getItem(LANG_KEY);
-      if (storedLang === "en" || storedLang === "de") setLang(storedLang);
+      if (storedLang === "en" || storedLang === "de") {
+        setLang(storedLang);
+        return;
+      }
     } catch {
-      // ponytail: localStorage unavailable, just stays on the "en" default
+      // ponytail: localStorage unavailable, fall through to the language guess
+    }
+    // No saved choice: this is a Germany-only app (all listings/results are German),
+    // so default to German unless the phone's language is clearly something else.
+    // Undetectable language also defaults to German.
+    try {
+      const nav = navigator.language?.toLowerCase() ?? "";
+      setLang(nav === "" || nav.startsWith("de") ? "de" : "en");
+    } catch {
+      setLang("de");
     }
   }, []);
 
@@ -473,6 +554,47 @@ export default function Home() {
     } catch {
       // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
     }
+  }, []);
+
+  // Cross-device sync: pick up an existing session on load, then react to sign-in/out.
+  // On sign-in we union this device's saved cars with the account's and write the result
+  // back both ways, so signing in never loses what was already saved locally.
+  useEffect(() => {
+    if (!accountEnabled) return;
+    let cancelled = false;
+
+    async function mergeFromAccount() {
+      const remote = await pullSaved();
+      if (cancelled || !remote || typeof remote !== "object") return;
+      setSaved((local) => {
+        const merged = { ...(remote as Record<string, Listing>), ...local };
+        try {
+          localStorage.setItem(SAVED_KEY, JSON.stringify(merged));
+        } catch {
+          // ponytail: storage unavailable, in-memory merge still fine for this session
+        }
+        pushSaved(merged);
+        return merged;
+      });
+      if (!cancelled) setSyncMsg(t.account.synced);
+    }
+
+    // onAuthChange emits INITIAL_SESSION on subscribe, so this covers both "already
+    // signed in on load" and "just signed in" without a second getSession() path.
+    const unsub = onAuthChange((email) => {
+      setSyncEmail(email);
+      if (email) {
+        setShowSync(false);
+        setSyncStep("email");
+        setSyncCode("");
+        mergeFromAccount();
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -719,13 +841,28 @@ export default function Home() {
           <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
             Partfinder
           </h1>
-          <button
-            type="button"
-            onClick={toggleLang}
-            className="shrink-0 rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-zinc-500 hover:text-black dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
-          >
-            {lang === "en" ? "DE" : "EN"}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {accountEnabled && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSync(true);
+                  setSyncErr("");
+                }}
+                title={t.account.syncTitle}
+                className="rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:border-zinc-500 hover:text-black dark:hover:border-zinc-500 dark:hover:text-zinc-50 border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+              >
+                {syncEmail ? `✓ ${t.account.sync}` : t.account.sync}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={toggleLang}
+              className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-zinc-500 hover:text-black dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
+            >
+              {lang === "en" ? "DE" : "EN"}
+            </button>
+          </div>
         </div>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -930,6 +1067,15 @@ export default function Home() {
                   {t.hideDuplicates}
                 </label>
               )}
+              {sortedListings.some((l) => l.location && l.location.trim()) && (
+                <button
+                  type="button"
+                  onClick={() => setMapView((v) => !v)}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:border-zinc-500 hover:text-black dark:border-zinc-700 dark:text-zinc-300 dark:hover:text-zinc-50"
+                >
+                  {mapView ? `☰ ${t.map.showList}` : `🗺 ${t.map.showMap}`}
+                </button>
+              )}
               {!showSaved && (
                 <button
                   type="button"
@@ -965,6 +1111,17 @@ export default function Home() {
               </p>
             )}
 
+          {mapView && sortedListings.length > 0 ? (
+            <ListingsMap
+              listings={sortedListings as MapListing[]}
+              fmtPrice={fmtPrice}
+              labels={{
+                geocoding: t.map.geocoding,
+                noneOnMap: t.map.noneOnMap,
+                openListing: t.map.openListing,
+              }}
+            />
+          ) : (
           <ul className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {sortedListings.map((l) => {
               const price = parsePrice(l.price);
@@ -1064,6 +1221,7 @@ export default function Home() {
               );
             })}
           </ul>
+          )}
           </>
         )}
 
@@ -1648,6 +1806,95 @@ export default function Home() {
                   })}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {showSync && (
+          <div
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 py-10 sm:items-center"
+            onClick={() => setShowSync(false)}
+          >
+            <div
+              className="w-full max-w-sm rounded-lg bg-white p-5 dark:bg-zinc-900 sm:p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-base font-semibold text-black dark:text-zinc-50">
+                  {t.account.heading}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowSync(false)}
+                  aria-label={t.account.close}
+                  className="shrink-0 text-zinc-400 hover:text-black dark:hover:text-zinc-50"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {syncEmail ? (
+                <div className="mt-4 space-y-4">
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    {t.account.signedInAs(syncEmail)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="w-full rounded-md border border-zinc-300 py-2 text-sm font-medium text-zinc-700 hover:border-zinc-500 hover:text-black dark:border-zinc-700 dark:text-zinc-300 dark:hover:text-zinc-50"
+                  >
+                    {t.account.signOut}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">{t.account.blurb}</p>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    value={syncInputEmail}
+                    onChange={(e) => setSyncInputEmail(e.target.value)}
+                    placeholder={t.account.emailPlaceholder}
+                    disabled={syncStep === "code"}
+                    className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-black placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
+                  />
+                  {syncStep === "email" ? (
+                    <button
+                      type="button"
+                      onClick={handleSendCode}
+                      disabled={syncBusy}
+                      className="w-full rounded-md bg-black py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-50 dark:text-black dark:hover:bg-white"
+                    >
+                      {syncBusy ? t.account.sending : t.account.sendCode}
+                    </button>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        value={syncCode}
+                        onChange={(e) => setSyncCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder={t.account.codePlaceholder}
+                        className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm tracking-widest text-black placeholder:tracking-normal placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyCode}
+                        disabled={syncBusy}
+                        className="w-full rounded-md bg-black py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-50 dark:text-black dark:hover:bg-white"
+                      >
+                        {syncBusy ? t.account.verifying : t.account.verify}
+                      </button>
+                    </>
+                  )}
+                  {syncMsg && !syncErr && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{syncMsg}</p>
+                  )}
+                  {syncErr && <p className="text-xs text-red-600 dark:text-red-400">{syncErr}</p>}
+                </div>
+              )}
             </div>
           </div>
         )}
