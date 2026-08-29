@@ -268,6 +268,10 @@ async function handleSearch(want: string): Promise<Response> {
   const isWrongShape = (key: string, raw: string): boolean => {
     if (key === "mileage_km") return !/^\d+$/.test(raw.trim());
     if (key === "year") return !/^(19|20)\d{2}$/.test(raw.trim());
+    // kleinanzeigen shows a bare "VB"/"VHB" (Verhandlungsbasis) or "Preis auf Anfrage"
+    // when the seller set no number - confirmed live as a card price of "VB". No digit
+    // anywhere = not a price, drop the field so the card shows no price line.
+    if (key === "price") return !/\d/.test(raw);
     return false;
   };
 
