@@ -49,6 +49,10 @@ type Dict = {
   priceBelow: string;
   priceAbove: string;
   priceBadgeTitle: string;
+  priceDropSince: (amount: string, since: string) => string;
+  priceRiseSince: (amount: string, since: string) => string;
+  priceChangeTitle: string;
+  sinceDays: (n: number) => string;
   perYearSuffix: string; // " km/yr" / " km/Jahr"
   kmPerYearTitle: string;
   saveListing: string;
@@ -193,6 +197,10 @@ export const translations: Record<Lang, Dict> = {
     priceBelow: "Below others found",
     priceAbove: "Above others found",
     priceBadgeTitle: "Compared to other results in this search, not full market data",
+    priceDropSince: (amount, since) => `▼ ${amount} cheaper (${since})`,
+    priceRiseSince: (amount, since) => `▲ ${amount} dearer (${since})`,
+    priceChangeTitle: "Change vs the price this listing showed the last time your search returned it",
+    sinceDays: (n) => (n <= 0 ? "today" : n === 1 ? "yesterday" : `${n} days ago`),
     perYearSuffix: " km/yr",
     kmPerYearTitle: "Average distance per year - the German TÜV benchmark is about 15,000 km/yr",
     saveListing: "Save listing",
@@ -343,6 +351,10 @@ export const translations: Record<Lang, Dict> = {
     priceBelow: "Günstiger als andere",
     priceAbove: "Teurer als andere",
     priceBadgeTitle: "Im Vergleich zu anderen Ergebnissen dieser Suche, keine vollständigen Marktdaten",
+    priceDropSince: (amount, since) => `▼ ${amount} günstiger (${since})`,
+    priceRiseSince: (amount, since) => `▲ ${amount} teurer (${since})`,
+    priceChangeTitle: "Änderung gegenüber dem Preis, den diese Anzeige bei deiner letzten Suche hatte",
+    sinceDays: (n) => (n <= 0 ? "heute" : n === 1 ? "gestern" : `vor ${n} Tagen`),
     perYearSuffix: " km/Jahr",
     kmPerYearTitle: "Durchschnittliche Fahrleistung pro Jahr - der TÜV-Richtwert liegt bei etwa 15.000 km/Jahr",
     saveListing: "Anzeige merken",

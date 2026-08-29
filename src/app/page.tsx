@@ -7,6 +7,7 @@ import { monthlyPayment } from "@/lib/finance";
 import { draftNegotiationMessage } from "@/lib/negotiation";
 import { translations, LANG_KEY, type Lang } from "@/lib/translations";
 import { parsePrice } from "@/lib/price";
+import { recordPrices, diffPrices, daysBetween, PRICE_HISTORY_KEY, type PriceHistory, type PriceChange } from "@/lib/priceHistory";
 import { parseMileage } from "@/lib/mileage";
 import { pushRecentSearch } from "@/lib/recentSearches";
 import { cleanMatchTags } from "@/lib/matchTags";
@@ -233,6 +234,30 @@ export default function Home() {
     const n = parsePrice(price);
     return n !== null && /^[\s€.,\d]+$/.test(price) ? `${nf(n)} €` : price;
   };
+  const todayISO = new Date().toISOString().slice(0, 10);
+  // Small "▼ €500 cheaper (3 days ago)" badge for a listing whose price moved since a
+  // past search of ours returned it. Nothing to show for first-time or unchanged listings.
+  const priceChangeBadge = (url: string) => {
+    const change = priceChanges[url];
+    if (!change) return null;
+    const drop = change.delta < 0;
+    const label = (drop ? t.priceDropSince : t.priceRiseSince)(
+      `${nf(Math.abs(change.delta))} €`,
+      t.sinceDays(daysBetween(change.since, todayISO)),
+    );
+    return (
+      <span
+        title={t.priceChangeTitle}
+        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+          drop
+            ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+            : "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+        }`}
+      >
+        {label}
+      </span>
+    );
+  };
   const [want, setWant] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -274,6 +299,11 @@ export default function Home() {
   const [showSaved, setShowSaved] = useState(false);
   const [mapView, setMapView] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  // Browser-local price memory: which listings moved since a past search returned them.
+  // The ref holds the full history (only touched at search time); the state holds just
+  // this search's diffs, keyed by listing URL, for the card badge.
+  const priceHistoryRef = useRef<PriceHistory>({});
+  const [priceChanges, setPriceChanges] = useState<Record<string, PriceChange>>({});
   // Optional cross-device sync. `syncEmail` non-null = signed in. All sync state lives
   // here; the app is fully usable with this untouched (saved stays in localStorage).
   const [syncEmail, setSyncEmail] = useState<string | null>(null);
@@ -522,6 +552,13 @@ export default function Home() {
   }
 
   useEffect(() => {
+    try {
+      const rawHistory = localStorage.getItem(PRICE_HISTORY_KEY);
+      const parsed = rawHistory ? JSON.parse(rawHistory) : {};
+      if (parsed && typeof parsed === "object") priceHistoryRef.current = parsed;
+    } catch {
+      // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
+    }
     const sharedWant = new URLSearchParams(window.location.search).get("q");
     if (sharedWant) {
       setWant(sharedWant);
@@ -532,10 +569,14 @@ export default function Home() {
         if (saved) {
           const { want: savedWant, listings: savedListings } = JSON.parse(saved);
           if (savedWant) setWant(savedWant);
-          if (Array.isArray(savedListings))
-            setListings(
-              savedListings.map((l: Listing) => ({ ...l, match_tags: cleanMatchTags(l.match_tags) }))
+          if (Array.isArray(savedListings)) {
+            const restored = savedListings.map((l: Listing) => ({ ...l, match_tags: cleanMatchTags(l.match_tags) }));
+            setListings(restored);
+            // Show price moves vs history without touching it - a plain reopen, not a search.
+            setPriceChanges(
+              diffPrices(priceHistoryRef.current, restored.map((l: Listing) => ({ url: l.url, price: parsePrice(l.price) }))),
             );
+          }
         }
       } catch {
         // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
@@ -727,6 +768,7 @@ export default function Home() {
     setMaxPrice("");
     setHideDuplicates(false);
     setShowSaved(false);
+    setPriceChanges({});
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_SEARCH_FUNCTION_URL as string, {
         method: "POST",
@@ -744,9 +786,22 @@ export default function Home() {
       setListings(taggedListings);
       const nextRecent = pushRecentSearch(recentSearches, want);
       setRecentSearches(nextRecent);
+      // Diff this search's prices against every price we've ever seen for these listings,
+      // then fold today's prices back into the history. No API calls - pure local memory.
+      const { history, changes } = recordPrices(
+        priceHistoryRef.current,
+        (Array.isArray(taggedListings) ? taggedListings : []).map((l: Listing) => ({
+          url: l.url,
+          price: parsePrice(l.price),
+        })),
+        new Date().toISOString().slice(0, 10),
+      );
+      priceHistoryRef.current = history;
+      setPriceChanges(changes);
       try {
         localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify({ want, listings: taggedListings }));
         localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(nextRecent));
+        localStorage.setItem(PRICE_HISTORY_KEY, JSON.stringify(history));
       } catch {
         // ponytail: storage full/unavailable, non-critical
       }
@@ -1196,6 +1251,7 @@ export default function Home() {
                           {badge === "below" ? t.priceBelow : t.priceAbove}
                         </span>
                       )}
+                      {priceChangeBadge(l.url)}
                       {l.year && <span>{l.year}</span>}
                       {l.mileage_km && <span>{fmtKm(l.mileage_km)} km</span>}
                       {l.fuel && <span>{l.fuel}</span>}
@@ -1318,6 +1374,7 @@ export default function Home() {
                       {badge === "below" ? t.priceBelow : t.priceAbove}
                     </span>
                   )}
+                  {priceChangeBadge(l.url)}
                   {l.year && <span>{l.year}</span>}
                   {l.mileage_km && <span>{fmtKm(l.mileage_km)} km</span>}
                   {l.fuel && <span>{l.fuel}</span>}
