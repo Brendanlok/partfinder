@@ -867,6 +867,10 @@ export default function Home() {
   const sortedListings = hideDuplicates
     ? pickRepresentatives(sortedAndFilteredListings, duplicates)
     : sortedAndFilteredListings;
+  // Gate both the map toggle and the map itself on this - `mapView` is sticky across
+  // searches, so without it a search whose results carry no location would render the
+  // map (0 pins) with its "back to list" toggle hidden, trapping the user in map view.
+  const listingsHaveLocation = sortedListings.some((l) => l.location && l.location.trim());
 
   // sourceFilter holds EXCLUDED sources (unchecked boxes), not included ones - so "exclude
   // nothing" (show all) and "exclude everything" (show none) are naturally distinct sets,
@@ -1122,7 +1126,7 @@ export default function Home() {
                   {t.hideDuplicates}
                 </label>
               )}
-              {sortedListings.some((l) => l.location && l.location.trim()) && (
+              {listingsHaveLocation && (
                 <button
                   type="button"
                   onClick={() => setMapView((v) => !v)}
@@ -1166,7 +1170,7 @@ export default function Home() {
               </p>
             )}
 
-          {mapView && sortedListings.length > 0 ? (
+          {mapView && listingsHaveLocation && sortedListings.length > 0 ? (
             <ListingsMap
               listings={sortedListings as MapListing[]}
               fmtPrice={fmtPrice}
