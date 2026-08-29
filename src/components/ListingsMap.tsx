@@ -32,6 +32,7 @@ export default function ListingsMap({ listings, fmtPrice, labels }: Props) {
   useEffect(() => {
     let cancelled = false;
     let cleanup = () => {};
+    setPending(true); // re-filter while the map is open: show "geocoding…" again for the new set
 
     (async () => {
       const leaflet = await import("leaflet");
