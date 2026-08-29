@@ -80,7 +80,20 @@ async function fetchListingSnippet(url: string): Promise<{ title: string; conten
     const res = await fetch(url, { headers: { "User-Agent": UA } });
     if (!res.ok) return null;
     const html = await res.text();
-    const title = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1];
+    let title = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1];
+    // autoscout24's og:title is a useless generic "Volkswagen für € 20.990" (confirmed live:
+    // every autoscout24 result card showed that instead of the model). The real model/body/
+    // colour is only in the <title> tag - "VW Golf GTI Limousine in Schwarz gebraucht in
+    // Schnaittach für € 20.990" - so use that, minus its "gebraucht in <city>" / "für € <n>" tail.
+    if (new URL(url).hostname.endsWith("autoscout24.de")) {
+      const htmlTitle = html.match(/<title>([^<]*)<\/title>/)?.[1]?.trim();
+      if (htmlTitle) {
+        title = htmlTitle
+          .replace(/\s+gebraucht\s+(kaufen\s+)?in\s+.+$/i, "")
+          .replace(/\s+für\s+€\s*[\d.,]+\s*$/i, "")
+          .trim();
+      }
+    }
     // autoscout24's og:description is a generic marketing blurb, but its <meta name="description">
     // carries "€ 18.980 | 103.700 km | 08/2017 | Benzin" - keep both so year/mileage/location
     // reach Gemini regardless of which site the ad is from.
