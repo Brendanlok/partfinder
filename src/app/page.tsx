@@ -673,7 +673,13 @@ export default function Home() {
   // price-filtered view - the badge means "cheap for this kind of car", so a min/max
   // price filter shouldn't recalibrate it (a €5k car under a €5-8k filter is still a
   // below-market car). Same principle as the duplicates note below.
-  const median = medianPrice(displayedListings ?? []);
+  // But only when every displayed listing is the same search - the Saved view can hold
+  // cars from unrelated past searches (a Golf next to a Panda), and a median across
+  // those makes the badge meaningless ("below others found" vs. a different car entirely).
+  const sameSearch = (displayedListings ?? []).every(
+    (l, _i, arr) => (l.want ?? "") === (arr[0].want ?? "")
+  );
+  const median = sameSearch ? medianPrice(displayedListings ?? []) : null;
   // Duplicates are computed over everything fetched/saved, not just the filtered/sorted
   // view - a source hidden by the filter checkboxes can still be the cheaper match worth
   // surfacing on the listing that IS shown.
