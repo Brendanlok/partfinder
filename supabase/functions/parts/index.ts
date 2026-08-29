@@ -203,6 +203,10 @@ async function handleParts(capped: string[], carDescription: string): Promise<Re
   // fix in search/index.ts closes for listings, just not caught here yet).
   const resultsByIssue = new Map(searches.map((s) => [s.issue, s.results]));
   const MAX_FIELD_LEN = 60;
+  // Same junk-price guard search/index.ts applies: Gemini sometimes returns a "price" with
+  // no number in it ("Preis auf Anfrage", "VB") or a status word ("unconfirmed", "not listed")
+  // instead of leaving it out. No digit = not a price; drop it so no junk renders next to the part.
+  const JUNK_VALUE = /\b(unconfirmed|unverified|unspecified|undetermined|unclear|not shown|not specified|not listed|tbd|pending)\b/i;
 
   // kfzteile24.de renders its prices client-side via JS (confirmed: fetching a real product
   // page's HTML directly has no price anywhere in it) so a real price from that site is rare;
@@ -219,7 +223,11 @@ async function handleParts(capped: string[], carDescription: string): Promise<Re
       delete clean.price;
       delete clean.source_title;
     }
-    if (typeof clean.price === "string" && clean.price.length > MAX_FIELD_LEN) delete clean.price;
+    if (
+      typeof clean.price === "string" &&
+      (clean.price.length > MAX_FIELD_LEN || !/\d/.test(clean.price) || JUNK_VALUE.test(clean.price))
+    )
+      delete clean.price;
     if (typeof clean.source_title === "string" && clean.source_title.length > MAX_FIELD_LEN * 2) delete clean.source_title;
     if (!clean.url) {
       const top = issueResults[0] ?? null;
