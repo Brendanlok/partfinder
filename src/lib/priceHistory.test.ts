@@ -7,7 +7,7 @@ import { recordPrices, diffPrices, daysBetween } from "./priceHistory.ts";
 // First sighting: recorded, no change reported.
 {
   const { history, changes } = recordPrices({}, [{ url: "a", price: 10000 }], "2026-08-20");
-  assert.deepStrictEqual(history, { a: { price: 10000, since: "2026-08-20" } });
+  assert.deepStrictEqual(history, { a: { price: 10000, since: "2026-08-20", seen: "2026-08-20" } });
   assert.deepStrictEqual(changes, {});
 }
 
@@ -16,15 +16,29 @@ import { recordPrices, diffPrices, daysBetween } from "./priceHistory.ts";
   const start = { a: { price: 10000, since: "2026-08-20" } };
   const { history, changes } = recordPrices(start, [{ url: "a", price: 9500 }], "2026-08-23");
   assert.deepStrictEqual(changes, { a: { delta: -500, since: "2026-08-20" } });
-  assert.deepStrictEqual(history.a, { price: 9500, since: "2026-08-23" });
+  assert.deepStrictEqual(history.a, { price: 9500, since: "2026-08-23", seen: "2026-08-23" });
 }
 
-// Unchanged price: no change, since date is left to age.
+// Unchanged price: no change, since date is left to age, but `seen` bumps to today.
 {
   const start = { a: { price: 10000, since: "2026-08-20" } };
   const { history, changes } = recordPrices(start, [{ url: "a", price: 10000 }], "2026-08-25");
   assert.deepStrictEqual(changes, {});
   assert.strictEqual(history.a.since, "2026-08-20");
+  assert.strictEqual(history.a.seen, "2026-08-25");
+}
+
+// Prune evicts by LAST seen, not first-seen-at-price: a long-stable listing that still
+// turns up every search must outlive a stale one-off entry with a newer `since`.
+{
+  const start: Record<string, { price: number; since: string; seen?: string }> = {
+    stable: { price: 5000, since: "2026-01-01", seen: "2026-01-01" },
+  };
+  for (let i = 0; i < 400; i++) start[`stale${i}`] = { price: i, since: "2026-07-01", seen: "2026-07-01" };
+  // "stable" reappears in today's search; the 400 stale entries do not.
+  const { history } = recordPrices(start, [{ url: "stable", price: 5000 }], "2026-08-30");
+  assert.strictEqual(Object.keys(history).length, 400);
+  assert.ok(history.stable, "actively-seen listing survives even with the oldest `since`");
 }
 
 // Unparseable / missing prices are ignored, not recorded.

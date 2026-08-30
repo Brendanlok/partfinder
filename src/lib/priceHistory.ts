@@ -7,7 +7,9 @@
 export const PRICE_HISTORY_KEY = "partfinder:priceHistory";
 
 // since = ISO date "yyyy-mm-dd" the listing was first seen at this price.
-export type PriceRecord = { price: number; since: string };
+// seen = ISO date the listing last turned up in a search (drives prune eviction order;
+// absent on records written before this field existed - prune falls back to `since`).
+export type PriceRecord = { price: number; since: string; seen?: string };
 export type PriceHistory = Record<string, PriceRecord>;
 
 // delta = current price - previously-seen price (negative = a drop).
@@ -46,8 +48,11 @@ export function recordPrices(
   const next: PriceHistory = { ...history };
   for (const { url, price } of listings) {
     if (!url || price === null || !Number.isFinite(price)) continue;
-    if (!next[url] || changes[url]) next[url] = { price, since: today };
-    // existing entry, price unchanged: leave it, so `since` keeps aging.
+    const prev = next[url];
+    if (!prev || changes[url]) next[url] = { price, since: today, seen: today };
+    // existing entry, price unchanged: keep `since` aging, but bump `seen` so an
+    // actively-relisted car isn't the first thing prune drops.
+    else next[url] = { ...prev, seen: today };
   }
   return { history: prune(next), changes };
 }
@@ -55,7 +60,8 @@ export function recordPrices(
 function prune(history: PriceHistory): PriceHistory {
   const entries = Object.entries(history);
   if (entries.length <= MAX_ENTRIES) return history;
-  entries.sort((a, b) => b[1].since.localeCompare(a[1].since));
+  const lastSeen = (r: PriceRecord) => r.seen ?? r.since;
+  entries.sort((a, b) => lastSeen(b[1]).localeCompare(lastSeen(a[1])));
   return Object.fromEntries(entries.slice(0, MAX_ENTRIES));
 }
 
