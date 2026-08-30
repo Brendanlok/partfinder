@@ -901,6 +901,29 @@ export default function Home() {
   // map (0 pins) with its "back to list" toggle hidden, trapping the user in map view.
   const listingsHaveLocation = sortedListings.some((l) => l.location && l.location.trim());
 
+  // Step through the visible (sorted+filtered) list from inside the detail modal, so a
+  // phone user browsing many cars doesn't have to close and re-tap each card. All the
+  // per-listing state (verdict, parts, drafts) is keyed by url, so it survives a step.
+  const modalIndex = selectedUrl ? sortedListings.findIndex((l) => l.url === selectedUrl) : -1;
+  function stepListing(dir: -1 | 1) {
+    if (modalIndex < 0) return;
+    const next = sortedListings[modalIndex + dir];
+    if (next) setSelectedUrl(next.url);
+  }
+  // Arrow keys mirror the on-screen ‹ › buttons (Escape-to-close lives in its own
+  // effect near the top). Re-subscribed on list/index change so it always has the
+  // current neighbours.
+  useEffect(() => {
+    if (modalIndex < 0) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft") stepListing(-1);
+      else if (e.key === "ArrowRight") stepListing(1);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalIndex, sortedListings]);
+
   // sourceFilter holds EXCLUDED sources (unchecked boxes), not included ones - so "exclude
   // nothing" (show all) and "exclude everything" (show none) are naturally distinct sets,
   // no size-collapsing tricks needed.
@@ -1374,6 +1397,26 @@ export default function Home() {
                 >
                   ✕
                 </button>
+                {modalIndex > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => stepListing(-1)}
+                    aria-label={t.prevListing}
+                    className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-lg leading-none text-white hover:bg-black/80"
+                  >
+                    ‹
+                  </button>
+                )}
+                {modalIndex >= 0 && modalIndex < sortedListings.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => stepListing(1)}
+                    aria-label={t.nextListing}
+                    className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-lg leading-none text-white hover:bg-black/80"
+                  >
+                    ›
+                  </button>
+                )}
               </div>
               <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-6">
                 <a

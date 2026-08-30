@@ -63,6 +63,8 @@ type Dict = {
 
   // Detail modal
   close: string;
+  prevListing: string;
+  nextListing: string;
   alsoListedOn: string;
   checkCondition: string;
   readingPhotos: string;
@@ -210,6 +212,8 @@ export const translations: Record<Lang, Dict> = {
     alsoOn: "Also on",
 
     close: "Close",
+    prevListing: "Previous listing",
+    nextListing: "Next listing",
     alsoListedOn: "Also listed on",
     checkCondition: "Check condition from photos",
     readingPhotos: "Reading photos…",
@@ -364,6 +368,8 @@ export const translations: Record<Lang, Dict> = {
     alsoOn: "Auch auf",
 
     close: "Schließen",
+    prevListing: "Vorheriges Angebot",
+    nextListing: "Nächstes Angebot",
     alsoListedOn: "Auch inseriert auf",
     checkCondition: "Zustand anhand der Fotos prüfen",
     readingPhotos: "Fotos werden ausgewertet…",
