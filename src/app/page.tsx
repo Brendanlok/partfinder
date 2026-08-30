@@ -635,7 +635,8 @@ export default function Home() {
         pushSaved(merged);
         return merged;
       });
-      if (!cancelled) setSyncMsg(t.account.synced);
+      // ponytail: no "synced" confirmation here — the modal is already closed on sign-in
+      // (setShowSync(false) below) and syncMsg only renders in the signed-out branch.
     }
 
     // onAuthChange emits INITIAL_SESSION on subscribe, so this covers both "already

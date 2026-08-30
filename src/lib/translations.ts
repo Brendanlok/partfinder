@@ -143,7 +143,6 @@ type Dict = {
     badCode: string;
     genericError: string;
     rateLimited: string;
-    synced: string;
     close: string;
   };
 };
@@ -300,7 +299,6 @@ export const translations: Record<Lang, Dict> = {
       badCode: "That code didn't work. Check it and try again.",
       genericError: "Something went wrong. Try again.",
       rateLimited: "Too many code requests. Wait a minute and try again.",
-      synced: "Saved cars synced.",
       close: "Close",
     },
   },
@@ -455,7 +453,6 @@ export const translations: Record<Lang, Dict> = {
       badCode: "Der Code hat nicht funktioniert. Bitte prüfen und erneut versuchen.",
       genericError: "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
       rateLimited: "Zu viele Code-Anfragen. Warte eine Minute und versuche es erneut.",
-      synced: "Gespeicherte Autos synchronisiert.",
       close: "Schließen",
     },
   },
