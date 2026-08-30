@@ -41,6 +41,7 @@ type Dict = {
   clearFilters: string;
   showingOf: (shown: number, total: number) => string;
   priceRange: (low: string, high: string, typical: string) => string;
+  lastChecked: (days: number) => string;
 
   // Voice input language tag for the Web Speech API
   speechLang: string;
@@ -193,6 +194,7 @@ export const translations: Record<Lang, Dict> = {
     clearFilters: "Clear filters",
     showingOf: (shown, total) => `Showing ${shown} of ${total} listings`,
     priceRange: (low, high, typical) => `${low}–${high} · typical ${typical}`,
+    lastChecked: (days) => `Prices last checked ${days === 1 ? "yesterday" : `${days} days ago`}`,
 
     speechLang: "en-US",
 
@@ -349,6 +351,7 @@ export const translations: Record<Lang, Dict> = {
     clearFilters: "Filter zurücksetzen",
     showingOf: (shown, total) => `${shown} von ${total} Anzeigen`,
     priceRange: (low, high, typical) => `${low}–${high} · üblich ${typical}`,
+    lastChecked: (days) => `Preise zuletzt ${days === 1 ? "gestern" : `vor ${days} Tagen`} geprüft`,
 
     speechLang: "de-DE",
 

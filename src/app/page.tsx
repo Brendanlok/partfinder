@@ -11,6 +11,7 @@ import { recordPrices, diffPrices, daysBetween, PRICE_HISTORY_KEY, type PriceHis
 import { parseMileage } from "@/lib/mileage";
 import { pushRecentSearch } from "@/lib/recentSearches";
 import { cleanMatchTags } from "@/lib/matchTags";
+import { daysAgo } from "@/lib/age";
 import type { MapListing } from "@/components/ListingsMap";
 import {
   accountEnabled,
@@ -267,6 +268,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [listings, setListings] = useState<Listing[] | null>(null);
+  // ISO time the shown listings were fetched - drives a "prices last checked N days ago"
+  // hint after a restore. null right after a fresh search (nothing stale to warn about).
+  const [searchedAt, setSearchedAt] = useState<string | null>(null);
   const [verdicts, setVerdicts] = useState<Record<string, VerdictState>>({});
   const [tutorials, setTutorials] = useState<Record<string, TutorialState>>({});
   const [statusIndex, setStatusIndex] = useState(0);
@@ -572,8 +576,9 @@ export default function Home() {
       try {
         const saved = localStorage.getItem(LAST_SEARCH_KEY);
         if (saved) {
-          const { want: savedWant, listings: savedListings } = JSON.parse(saved);
+          const { want: savedWant, listings: savedListings, at } = JSON.parse(saved);
           if (savedWant) setWant(savedWant);
+          if (typeof at === "string") setSearchedAt(at);
           if (Array.isArray(savedListings)) {
             const restored = savedListings.map((l: Listing) => ({ ...l, match_tags: cleanMatchTags(l.match_tags) }));
             setListings(restored);
@@ -780,6 +785,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     setListings(null);
+    setSearchedAt(null);
     setSortBy("relevance");
     setSourceFilter(new Set());
     setFuelFilter(new Set());
@@ -818,7 +824,10 @@ export default function Home() {
       priceHistoryRef.current = history;
       setPriceChanges(changes);
       try {
-        localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify({ want, listings: taggedListings }));
+        localStorage.setItem(
+          LAST_SEARCH_KEY,
+          JSON.stringify({ want, listings: taggedListings, at: new Date().toISOString() }),
+        );
         localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(nextRecent));
         localStorage.setItem(PRICE_HISTORY_KEY, JSON.stringify(history));
       } catch {
@@ -891,6 +900,10 @@ export default function Home() {
       .filter((p): p is number => p !== null);
     return { low: Math.min(...prices), high: Math.max(...prices), median };
   })();
+  // Heads-up that a restored search is old - used-car prices move and ads sell fast.
+  // Not shown in the Saved view (those cars aren't a live search) or right after a
+  // fresh search (searchedAt is null then).
+  const staleDays = !showSaved && searchedAt ? daysAgo(searchedAt) : null;
   // Duplicates are computed over everything fetched/saved, not just the filtered/sorted
   // view - a source hidden by the filter checkboxes can still be the cheaper match worth
   // surfacing on the listing that IS shown.
@@ -1236,6 +1249,10 @@ export default function Home() {
               <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                 {t.priceRange(`${nf(priceSpread.low)} €`, `${nf(priceSpread.high)} €`, `${nf(priceSpread.median)} €`)}
               </p>
+            )}
+
+            {staleDays !== null && listings && listings.length > 0 && (
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t.lastChecked(staleDays)}</p>
             )}
 
           {mapView && listingsHaveLocation && sortedListings.length > 0 ? (

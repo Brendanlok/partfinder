@@ -29,4 +29,8 @@ assert.strictEqual(translations.de.suggestedOffer("1", "2").includes("1"), true)
 assert.strictEqual(translations.de.issuesFound(1), "· 1 Problem gefunden");
 assert.strictEqual(translations.de.issuesFound(2), "· 2 Probleme gefunden");
 
+assert.strictEqual(translations.en.lastChecked(1), "Prices last checked yesterday");
+assert.strictEqual(translations.en.lastChecked(4), "Prices last checked 4 days ago");
+assert.strictEqual(translations.de.lastChecked(1), "Preise zuletzt gestern geprüft");
+
 console.log("translations.test.ts: all checks passed");
