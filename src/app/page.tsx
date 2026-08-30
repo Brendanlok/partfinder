@@ -916,6 +916,11 @@ export default function Home() {
   useEffect(() => {
     if (modalIndex < 0) return;
     function onKey(e: KeyboardEvent) {
+      // Don't hijack arrow keys while the user is in a text field inside the modal
+      // (offer amount, custom part name/price, the draft-message textarea) - there the
+      // arrows move the caret; stepping to another listing mid-edit loses their input.
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
       if (e.key === "ArrowLeft") stepListing(-1);
       else if (e.key === "ArrowRight") stepListing(1);
     }
@@ -1397,6 +1402,11 @@ export default function Home() {
                 >
                   ✕
                 </button>
+                {modalIndex >= 0 && sortedListings.length > 1 && (
+                  <span className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium leading-none text-white">
+                    {modalIndex + 1} / {sortedListings.length}
+                  </span>
+                )}
                 {modalIndex > 0 && (
                   <button
                     type="button"
