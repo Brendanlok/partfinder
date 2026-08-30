@@ -835,8 +835,13 @@ export default function Home() {
   // Saved view replaces search results entirely (its own list, spanning past searches) -
   // everything below (sort/filter/median/modal lookup) reads from this instead of `listings`.
   const displayedListings: Listing[] | null = showSaved ? Object.values(saved) : listings;
+  // Resolve from the list the modal actually steps through (search results, or the saved
+  // list in Saved view) so the card, the "n / N" counter and the ‹ › neighbours all agree.
+  // Fall back to the saved copy for a car that's no longer in the current results.
   const selectedListing =
-    listings?.find((l) => l.url === selectedUrl) ?? (selectedUrl ? saved[selectedUrl] : undefined) ?? null;
+    displayedListings?.find((l) => l.url === selectedUrl) ??
+    (selectedUrl ? saved[selectedUrl] : undefined) ??
+    null;
   const availableSources = displayedListings ? [...new Set(displayedListings.map((l) => l.source))] : [];
   const availableFuels = displayedListings
     ? [...new Set(displayedListings.map((l) => l.fuel).filter((f): f is string => !!f))]
