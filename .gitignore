@@ -42,12 +42,9 @@ next-env.d.ts
 supabase/.temp/
 /telegram-bot/config.json
 _*.json
-# auto-dev scratch: API response dumps written at repo root during work sessions
-/dl.json
-/todo.json
-/search-result.json
-/s2.json
-/patch_dl.json
-/out_dl.json
-/newrow.json
-/nrout.json
+# auto-dev scratch: API response dumps get written to the repo root during work sessions
+# under ever-changing names. Ignore every root-level .json except the real config files.
+/*.json
+!/package.json
+!/package-lock.json
+!/tsconfig.json
