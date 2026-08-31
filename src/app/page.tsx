@@ -10,7 +10,7 @@ import { parsePrice } from "@/lib/price";
 import { recordPrices, diffPrices, daysBetween, PRICE_HISTORY_KEY, type PriceHistory, type PriceChange } from "@/lib/priceHistory";
 import { parseMileage } from "@/lib/mileage";
 import { pushRecentSearch } from "@/lib/recentSearches";
-import { cleanMatchTags } from "@/lib/matchTags";
+import { cleanMatchTags, translateTag } from "@/lib/matchTags";
 import { daysAgo } from "@/lib/age";
 import type { MapListing } from "@/components/ListingsMap";
 import {
@@ -1329,7 +1329,7 @@ export default function Home() {
                             key={tag}
                             className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
                           >
-                            {tag}
+                            {translateTag(tag, lang)}
                           </span>
                         ))}
                       </div>
@@ -1470,7 +1470,7 @@ export default function Home() {
                         key={tag}
                         className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
                       >
-                        {tag}
+                        {translateTag(tag, lang)}
                       </span>
                     ))}
                   </div>
