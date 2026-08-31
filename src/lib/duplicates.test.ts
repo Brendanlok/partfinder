@@ -67,6 +67,17 @@ assert.strictEqual(dupes["a"]?.length, 1);
 assert.strictEqual(dupes["a"][0].url, "b");
 assert.strictEqual(dupes["c"], undefined, "unrelated listing should have no matches");
 assert.strictEqual(duplicateSummary(dupes["a"]), "AutoScout24 for €18,900");
+assert.strictEqual(
+  duplicateSummary(dupes["a"], { forWord: "für", more: (n) => `+${n} weitere` }),
+  "AutoScout24 für €18,900",
+);
+assert.strictEqual(
+  duplicateSummary(
+    [{ url: "b", source: "AutoScout24", price: "€18,900" }, { url: "d", source: "Kleinanzeigen", price: "€20,000" }],
+    { forWord: "für", more: (n) => `+${n} weitere` },
+  ),
+  "AutoScout24 für €18,900 +1 weitere",
+);
 
 // pickRepresentatives keeps the best-scoring listing per cross-posted cluster and
 // leaves an unrelated listing alone.

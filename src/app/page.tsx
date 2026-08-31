@@ -1358,7 +1358,7 @@ export default function Home() {
                     </div>
                     {duplicates[l.url] && (
                       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        {t.alsoOn} {duplicateSummary(duplicates[l.url])}
+                        {t.alsoOn} {duplicateSummary(duplicates[l.url], { forWord: t.alsoOnFor, more: t.alsoOnMore })}
                       </p>
                     )}
                   </div>

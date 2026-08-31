@@ -65,12 +65,19 @@ export function isProbablySameCar(a: DupListing, b: DupListing): boolean {
 }
 
 // Cheapest-priced match first (that's the useful one to lead with), unpriced matches
-// last since there's nothing to compare.
-export function duplicateSummary(matches: DuplicateMatch[]): string {
+// last since there's nothing to compare. `labels` lets the UI localise the two
+// connective words; defaults keep it English for the unit test and any plain caller.
+export function duplicateSummary(
+  matches: DuplicateMatch[],
+  labels: { forWord: string; more: (n: number) => string } = {
+    forWord: "for",
+    more: (n) => `+${n} more`,
+  }
+): string {
   const sorted = [...matches].sort((a, b) => (parsePrice(a.price) ?? Infinity) - (parsePrice(b.price) ?? Infinity));
   const [first, ...rest] = sorted;
-  const priced = first.price ? ` for ${first.price}` : "";
-  return rest.length > 0 ? `${first.source}${priced} +${rest.length} more` : `${first.source}${priced}`;
+  const priced = first.price ? ` ${labels.forWord} ${first.price}` : "";
+  return rest.length > 0 ? `${first.source}${priced} ${labels.more(rest.length)}` : `${first.source}${priced}`;
 }
 
 // Collapses each cross-posted cluster (a-dupes-b-dupes-c, transitively) down to its

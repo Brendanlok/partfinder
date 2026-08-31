@@ -69,6 +69,8 @@ type Dict = {
   removeFromSaved: string;
   compare: string;
   alsoOn: string; // "Also on" / "Auch auf"
+  alsoOnFor: string; // connective in "Also on X for €12,500"
+  alsoOnMore: (n: number) => string; // "+2 more" / "+2 weitere"
 
   // Detail modal
   close: string;
@@ -227,6 +229,8 @@ export const translations: Record<Lang, Dict> = {
     removeFromSaved: "Remove from saved",
     compare: "Compare",
     alsoOn: "Also on",
+    alsoOnFor: "for",
+    alsoOnMore: (n) => `+${n} more`,
 
     close: "Close",
     prevListing: "Previous listing",
@@ -391,6 +395,8 @@ export const translations: Record<Lang, Dict> = {
     removeFromSaved: "Aus Merkliste entfernen",
     compare: "Vergleichen",
     alsoOn: "Auch auf",
+    alsoOnFor: "für",
+    alsoOnMore: (n) => `+${n} weitere`,
 
     close: "Schließen",
     prevListing: "Vorheriges Angebot",
