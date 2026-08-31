@@ -33,4 +33,11 @@ assert.strictEqual(translations.en.lastChecked(1), "Prices last checked yesterda
 assert.strictEqual(translations.en.lastChecked(4), "Prices last checked 4 days ago");
 assert.strictEqual(translations.de.lastChecked(1), "Preise zuletzt gestern geprüft");
 
+// UI error strings must be non-empty in both languages (shown instead of the
+// English-only Edge Function error).
+for (const k of ["searchError", "conditionError", "conditionUnavailableMobile", "partsError", "stepsError"] as const) {
+  assert.ok(translations.en[k].length > 0 && translations.de[k].length > 0, `${k} must be set in both languages`);
+  assert.notStrictEqual(translations.en[k], translations.de[k], `${k} should actually be translated`);
+}
+
 console.log("translations.test.ts: all checks passed");

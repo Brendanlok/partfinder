@@ -717,12 +717,12 @@ export default function Home() {
         body: JSON.stringify({ url: listing.url, want: listing.want ?? want }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Couldn't check this listing.");
+      if (!res.ok) throw new Error(res.status === 422 ? t.conditionUnavailableMobile : t.conditionError);
       setVerdicts((v) => ({ ...v, [listing.url]: { data } }));
     } catch (e) {
       setVerdicts((v) => ({
         ...v,
-        [listing.url]: { error: e instanceof Error ? e.message : "Couldn't check this listing." },
+        [listing.url]: { error: e instanceof Error ? e.message : t.conditionError },
       }));
     }
   }
@@ -732,6 +732,7 @@ export default function Home() {
   // listings), and issue text alone would show one listing's tutorial under another's.
   async function fetchTutorial(listingUrl: string, issue: string, wantContext: string) {
     const key = `${listingUrl}::${issue}`;
+    const stepsErr = t.stepsError; // `t` is shadowed by the setTutorials updater arg below
     setTutorials((t) => ({ ...t, [key]: { loading: true } }));
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_TUTORIAL_FUNCTION_URL as string, {
@@ -743,12 +744,12 @@ export default function Home() {
         body: JSON.stringify({ issue, want: wantContext }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Couldn't load repair steps.");
+      if (!res.ok) throw new Error(stepsErr);
       setTutorials((t) => ({ ...t, [key]: { data } }));
     } catch (e) {
       setTutorials((t) => ({
         ...t,
-        [key]: { error: e instanceof Error ? e.message : "Couldn't load repair steps." },
+        [key]: { error: e instanceof Error ? e.message : stepsErr },
       }));
     }
   }
@@ -767,12 +768,12 @@ export default function Home() {
         body: JSON.stringify({ issues, want: wantContext }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Couldn't estimate parts cost.");
+      if (!res.ok) throw new Error(t.partsError);
       setParts((p) => ({ ...p, [listingUrl]: { data: data.parts } }));
     } catch (e) {
       setParts((p) => ({
         ...p,
-        [listingUrl]: { error: e instanceof Error ? e.message : "Couldn't estimate parts cost." },
+        [listingUrl]: { error: e instanceof Error ? e.message : t.partsError },
       }));
     }
   }
@@ -804,7 +805,7 @@ export default function Home() {
         body: JSON.stringify({ want }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+      if (!res.ok) throw new Error(t.searchError);
       const taggedListings = Array.isArray(data.listings)
         ? data.listings.map((l: Listing) => ({ ...l, want, match_tags: cleanMatchTags(l.match_tags) }))
         : data.listings;
@@ -834,7 +835,7 @@ export default function Home() {
         // ponytail: storage full/unavailable, non-critical
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : t.searchError);
     } finally {
       setLoading(false);
     }

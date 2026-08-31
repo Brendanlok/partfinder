@@ -43,6 +43,14 @@ type Dict = {
   priceRange: (low: string, high: string, typical: string) => string;
   lastChecked: (days: number) => string;
 
+  // Error messages shown in the UI (the Edge Functions only return English, so the
+  // client shows its own translated copy instead of surfacing the raw server string)
+  searchError: string;
+  conditionError: string;
+  conditionUnavailableMobile: string;
+  partsError: string;
+  stepsError: string;
+
   // Voice input language tag for the Web Speech API
   speechLang: string;
 
@@ -195,6 +203,13 @@ export const translations: Record<Lang, Dict> = {
     showingOf: (shown, total) => `Showing ${shown} of ${total} listings`,
     priceRange: (low, high, typical) => `${low}–${high} · typical ${typical}`,
     lastChecked: (days) => `Prices last checked ${days === 1 ? "yesterday" : `${days} days ago`}`,
+
+    searchError: "Search failed. Try again in a moment.",
+    conditionError: "Couldn't check this listing. Try again.",
+    conditionUnavailableMobile:
+      "mobile.de blocks automated access, so photo condition checks aren't available for its listings yet.",
+    partsError: "Couldn't estimate parts cost. Try again.",
+    stepsError: "Couldn't load repair steps. Try again.",
 
     speechLang: "en-US",
 
@@ -352,6 +367,13 @@ export const translations: Record<Lang, Dict> = {
     showingOf: (shown, total) => `${shown} von ${total} Anzeigen`,
     priceRange: (low, high, typical) => `${low}–${high} · üblich ${typical}`,
     lastChecked: (days) => `Preise zuletzt ${days === 1 ? "gestern" : `vor ${days} Tagen`} geprüft`,
+
+    searchError: "Suche fehlgeschlagen. Bitte gleich noch einmal versuchen.",
+    conditionError: "Anzeige konnte nicht geprüft werden. Bitte erneut versuchen.",
+    conditionUnavailableMobile:
+      "mobile.de sperrt automatische Zugriffe, daher sind Zustandsprüfungen anhand der Fotos für mobile.de-Anzeigen noch nicht verfügbar.",
+    partsError: "Teilekosten konnten nicht geschätzt werden. Bitte erneut versuchen.",
+    stepsError: "Reparaturschritte konnten nicht geladen werden. Bitte erneut versuchen.",
 
     speechLang: "de-DE",
 
