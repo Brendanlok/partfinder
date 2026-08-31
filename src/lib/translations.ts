@@ -36,6 +36,7 @@ type Dict = {
   hideDuplicates: string;
   hideDuplicatesTitle: string;
   shareSearch: string;
+  shareListing: string;
   copied: string;
   noResultsFilters: string;
   clearFilters: string;
@@ -199,6 +200,7 @@ export const translations: Record<Lang, Dict> = {
     hideDuplicates: "Hide duplicates",
     hideDuplicatesTitle: "Show one card per car, not one per site it's cross-posted on",
     shareSearch: "🔗 Share search",
+    shareListing: "🔗 Share this car",
     copied: "Copied!",
     noResultsFilters: "No results match these filters.",
     clearFilters: "Clear filters",
@@ -365,6 +367,7 @@ export const translations: Record<Lang, Dict> = {
     hideDuplicates: "Duplikate ausblenden",
     hideDuplicatesTitle: "Nur eine Karte pro Auto zeigen, nicht eine pro Seite, auf der es doppelt inseriert ist",
     shareSearch: "🔗 Suche teilen",
+    shareListing: "🔗 Dieses Auto teilen",
     copied: "Kopiert!",
     noResultsFilters: "Keine Ergebnisse mit diesen Filtern.",
     clearFilters: "Filter zurücksetzen",

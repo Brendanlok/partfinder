@@ -331,6 +331,9 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   // Same pattern for the build-report "Copy summary" button in the detail modal.
   const [summaryCopied, setSummaryCopied] = useState(false);
+  // And for the "Share this car" button in the detail modal (clipboard-fallback path only -
+  // the native share sheet, when present, gives its own feedback).
+  const [listingShared, setListingShared] = useState(false);
   // Negotiation draft is per-listing (which one's expanded) - Set, not a single bool,
   // same reasoning as expandedVerdicts.
   const [draftOpen, setDraftOpen] = useState<Set<string>>(new Set());
@@ -427,6 +430,20 @@ export default function Home() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // ponytail: clipboard blocked/unavailable (e.g. no HTTPS, permission denied), non-critical
+    }
+  }
+
+  async function shareListing(title: string, url: string) {
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setListingShared(true);
+      setTimeout(() => setListingShared(false), 2000);
+    } catch {
+      // ponytail: share sheet dismissed or clipboard blocked, non-critical
     }
   }
 
@@ -1460,6 +1477,15 @@ export default function Home() {
                 >
                   {l.title} ↗
                 </a>
+                <div className="mt-1">
+                  <button
+                    type="button"
+                    onClick={() => shareListing(l.title, l.url)}
+                    className="text-sm font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
+                  >
+                    {listingShared ? t.copied : t.shareListing}
+                  </button>
+                </div>
                 {typeof l.match_score === "number" && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${matchColor(l.match_score)}`}>
