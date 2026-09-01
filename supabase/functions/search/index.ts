@@ -1,5 +1,7 @@
 // Runs server-side on Supabase Edge Functions (Deno). Keeps TAVILY_API_KEY / GEMINI_API_KEY
 // secret - only the anon/publishable key (safe to expose) reaches the static frontend.
+import { cleanListingTitle } from "./title.ts";
+
 const LISTING_SITES = ["mobile.de", "autoscout24.de", "kleinanzeigen.de"];
 
 // Per-site shape of a single-ad permalink vs. a category/search-results page - Gemini
@@ -417,7 +419,8 @@ async function handleSearch(want: string): Promise<Response> {
     const url = typeof l.url === "string" ? l.url : null;
     const image = url ? imageByUrl.get(url) : null;
     const source = url ? sourceFromUrl(url) : l.source;
-    return { ...l, ...(image ? { image } : {}), source };
+    const title = typeof l.title === "string" ? cleanListingTitle(l.title) : l.title;
+    return { ...l, title, ...(image ? { image } : {}), source };
   });
 
   return Response.json({ listings: dedupedListings }, { headers: corsHeaders });
