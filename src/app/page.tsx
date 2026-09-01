@@ -1068,6 +1068,7 @@ export default function Home() {
               onChange={(e) => setWant(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()}
               placeholder={t.searchPlaceholder}
+              maxLength={200}
               className={`w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 ${speechSupported ? "pr-11" : ""}`}
             />
             {speechSupported && (

@@ -128,7 +128,10 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: "Invalid request." }, { status: 400, headers: corsHeaders });
   }
   const { want } = body;
-  if (!want || typeof want !== "string") {
+  // Length cap is the real trust boundary - the frontend input has maxLength=200, but a
+  // direct caller could paste an essay straight into the Tavily query + Gemini prompt and
+  // burn shared free-tier quota. 300 leaves headroom over the UI's 200.
+  if (!want || typeof want !== "string" || want.length > 300) {
     return Response.json({ error: "Describe the car you want." }, { status: 400, headers: corsHeaders });
   }
 
