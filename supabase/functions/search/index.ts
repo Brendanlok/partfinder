@@ -29,6 +29,15 @@ function sourceFromUrl(url: string): string {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+// ponytail: none of the outbound fetches below had a timeout. The marketplaces
+// actively throttle datacenter traffic, and one hung connection would stall the
+// whole search until Supabase's 150s platform kill - the user just sees "Search
+// failed" ~2 min later (observed live 02.09). A per-fetch deadline turns a slow
+// site into one skipped listing instead. AbortSignal.timeout throws on expiry,
+// which every caller here already catches.
+const timedFetch = (url: string, opts: RequestInit, ms: number) =>
+  fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });
+
 // Tavily's domain-restricted car search usually surfaces category/hub pages rather than
 // single-ad permalinks (verified directly: for common queries almost every result is a
 // hub page). Both real ad sites embed genuine ad links in a hub page's HTML - kleinanzeigen
@@ -43,7 +52,7 @@ async function crawlForListingUrls(hubUrl: string): Promise<string[]> {
   const site = Object.keys(AD_PATH_PATTERN).find((s) => new URL(hubUrl).hostname.endsWith(s));
   if (!site) return [];
   try {
-    const res = await fetch(hubUrl, { headers: { "User-Agent": UA } });
+    const res = await timedFetch(hubUrl, { headers: { "User-Agent": UA } }, 8000);
     if (!res.ok) return [];
     const html = await res.text();
     const paths = [...html.matchAll(AD_PATH_PATTERN[site])].map((m) => m[1]);
@@ -79,7 +88,7 @@ function kleinanzeigenSpecLine(html: string): string {
 // keeps the crawl fallback as fabrication-proof as the direct-hit path.
 async function fetchListingSnippet(url: string): Promise<{ title: string; content: string; image: string | null } | null> {
   try {
-    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    const res = await timedFetch(url, { headers: { "User-Agent": UA } }, 8000);
     if (!res.ok) return null;
     const html = await res.text();
     let title = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1];
@@ -142,28 +151,43 @@ Deno.serve(async (req: Request) => {
   // none), so the browser reports a bare CORS failure instead of a real error message.
   try {
     return await handleSearch(want);
-  } catch {
+  } catch (e) {
+    // ponytail: the function had zero logging, so every "Search failed" was blind to
+    // diagnose from the dashboard (confirmed 02.09 - three live searches failed and the
+    // logs showed only boot/shutdown). One line per failure path is enough to tell a
+    // quota 429 from a timeout from a parse bug next time, via function_logs.
+    console.error("search: uncaught", e instanceof Error ? e.message : String(e));
     return Response.json({ error: "Search failed, try again." }, { status: 502, headers: corsHeaders });
   }
 });
 
 async function handleSearch(want: string): Promise<Response> {
-  const tavilyRes = await fetch("https://api.tavily.com/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: Deno.env.get("TAVILY_API_KEY"),
-      query: `${want} gebraucht kaufen Germany used car listing`,
-      include_domains: LISTING_SITES,
-      // ponytail: "basic" depth is ~1 Tavily credit and single-pass vs "advanced"'s
-      // multi-pass rerank (~2 credits, most of the old 30-50s). Queries here are
-      // already narrow (include_domains + a specific car ask), so basic's recall
-      // is plenty - bump back to advanced if match quality regresses.
-      search_depth: "basic",
-      max_results: 10,
-    }),
-  });
+  let tavilyRes: Response;
+  try {
+    tavilyRes = await timedFetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: Deno.env.get("TAVILY_API_KEY"),
+        query: `${want} gebraucht kaufen Germany used car listing`,
+        include_domains: LISTING_SITES,
+        // ponytail: "basic" depth is ~1 Tavily credit and single-pass vs "advanced"'s
+        // multi-pass rerank (~2 credits, most of the old 30-50s). Queries here are
+        // already narrow (include_domains + a specific car ask), so basic's recall
+        // is plenty - bump back to advanced if match quality regresses.
+        search_depth: "basic",
+        max_results: 10,
+      }),
+    }, 35000);
+  } catch (e) {
+    // distinct from the Gemini timeout below - tells the next session which upstream
+    // is the slow one without another live search (02.09: search was failing on a
+    // bare "Signal timed out" with no way to tell Tavily from Gemini).
+    console.error("search: tavily fetch failed", e instanceof Error ? e.message : String(e));
+    return Response.json({ error: "Search failed, try again." }, { status: 502, headers: corsHeaders });
+  }
   if (!tavilyRes.ok) {
+    console.error("search: tavily", tavilyRes.status, (await tavilyRes.text()).slice(0, 200));
     return Response.json({ error: "Search failed, try again." }, { status: 502, headers: corsHeaders });
   }
   const tavilyData = await tavilyRes.json();
@@ -291,7 +315,9 @@ async function handleSearch(want: string): Promise<Response> {
   };
 
   async function askGemini(): Promise<{ listings: Record<string, unknown>[] } | null> {
-    const geminiRes = await fetch(
+    let geminiRes: Response;
+    try {
+      geminiRes = await timedFetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
       {
         method: "POST",
@@ -341,9 +367,17 @@ async function handleSearch(want: string): Promise<Response> {
             },
           },
         }),
-      }
-    );
-    if (!geminiRes.ok) return null;
+      },
+      45000
+      );
+    } catch (e) {
+      console.error("search: gemini fetch failed", e instanceof Error ? e.message : String(e));
+      return null;
+    }
+    if (!geminiRes.ok) {
+      console.error("search: gemini", geminiRes.status, (await geminiRes.text()).slice(0, 200));
+      return null;
+    }
     const geminiData = await geminiRes.json();
     const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     try {
@@ -351,6 +385,7 @@ async function handleSearch(want: string): Promise<Response> {
       return { listings: parsed.listings ?? [] };
     } catch {
       // ponytail: Gemini occasionally returns malformed/truncated JSON despite schema mode.
+      console.error("search: gemini bad JSON", text.slice(0, 200));
       return null;
     }
   }
