@@ -340,6 +340,36 @@ export default function Home() {
   const [draftOpen, setDraftOpen] = useState<Set<string>>(new Set());
   const [draftCopied, setDraftCopied] = useState(false);
 
+  // Partfinder has never shipped a service worker. If a browser still holds one
+  // (an orphaned registration from an older app on this github.io origin), it keeps
+  // serving a stale JS bundle after every deploy. Purge any registration + all Cache
+  // Storage once per browser - a no-op when there's nothing to clean.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("sw-purged") === "1") return;
+    } catch {
+      return;
+    }
+    const jobs: Promise<unknown>[] = [];
+    if ("serviceWorker" in navigator) {
+      jobs.push(
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((rs) => Promise.all(rs.map((r) => r.unregister()))),
+      );
+    }
+    if ("caches" in window) {
+      jobs.push(caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k)))));
+    }
+    Promise.allSettled(jobs).finally(() => {
+      try {
+        localStorage.setItem("sw-purged", "1");
+      } catch {
+        /* private mode - fine, it just retries next load */
+      }
+    });
+  }, []);
+
   // Escape closes the detail modal, same as clicking the backdrop or the × button.
   useEffect(() => {
     if (!selectedUrl) return;
