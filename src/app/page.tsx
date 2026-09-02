@@ -1398,6 +1398,18 @@ export default function Home() {
                   </div>
                   <div className="p-3">
                     <p className="truncate font-medium text-black dark:text-zinc-50">{l.title}</p>
+                    {/* In Saved view a user often collects cars from several different
+                        searches (a Golf next to a Panda) - show which search found each
+                        one so the pile stays legible. Hidden when every saved car is from
+                        the same search (label would just be noise) and on live results. */}
+                    {showSaved && !sameSearch && l.want && (
+                      <p
+                        className="mt-0.5 truncate text-xs text-zinc-400 dark:text-zinc-600"
+                        title={t.savedSearchContextTitle}
+                      >
+                        🔍 {l.want}
+                      </p>
+                    )}
                     {typeof l.match_score === "number" && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${matchColor(l.match_score)}`}>

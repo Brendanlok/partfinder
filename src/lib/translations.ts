@@ -73,6 +73,7 @@ type Dict = {
   alsoOn: string; // "Also on" / "Auch auf"
   alsoOnFor: string; // connective in "Also on X for €12,500"
   alsoOnMore: (n: number) => string; // "+2 more" / "+2 weitere"
+  savedSearchContextTitle: string; // tooltip on the "🔍 <query>" line in Saved view
 
   // Detail modal
   close: string;
@@ -236,6 +237,7 @@ export const translations: Record<Lang, Dict> = {
     alsoOn: "Also on",
     alsoOnFor: "for",
     alsoOnMore: (n) => `+${n} more`,
+    savedSearchContextTitle: "The search that found this car",
 
     close: "Close",
     prevListing: "Previous listing",
@@ -405,6 +407,7 @@ export const translations: Record<Lang, Dict> = {
     alsoOn: "Auch auf",
     alsoOnFor: "für",
     alsoOnMore: (n) => `+${n} weitere`,
+    savedSearchContextTitle: "Die Suche, die dieses Auto gefunden hat",
 
     close: "Schließen",
     prevListing: "Vorheriges Angebot",
