@@ -67,6 +67,7 @@ export function translateTag(tag: string, lang: "en" | "de"): string {
   if ((m = t.match(/^far from (.+)$/i))) return `Weit von ${m[1]} entfernt`;
   if ((m = t.match(/^not an? (.+)$/i))) return `Kein ${m[1]}`;
   if ((m = t.match(/^(.+) generation$/i))) return `${m[1]} Generation`;
+  if ((m = t.match(/^(.+) model$/i))) return `${m[1]} Modell`;
 
   return tag;
 }

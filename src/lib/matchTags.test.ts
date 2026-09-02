@@ -32,6 +32,7 @@ assert.strictEqual(translateTag("Near Munich", "de"), "In der Nähe von Munich")
 assert.strictEqual(translateTag("Far from Munich", "de"), "Weit von Munich entfernt");
 assert.strictEqual(translateTag("Not a GTI", "de"), "Kein GTI");
 assert.strictEqual(translateTag("Golf 7 generation", "de"), "Golf 7 Generation");
+assert.strictEqual(translateTag("Facelift model", "de"), "Facelift Modell");
 assert.strictEqual(translateTag("Some phrase we never mapped", "de"), "Some phrase we never mapped");
 
 console.log("matchTags.test.ts: all checks passed");
