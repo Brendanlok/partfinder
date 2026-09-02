@@ -33,6 +33,9 @@ assert.strictEqual(translateTag("Far from Munich", "de"), "Weit von Munich entfe
 assert.strictEqual(translateTag("Not a GTI", "de"), "Kein GTI");
 assert.strictEqual(translateTag("Golf 7 generation", "de"), "Golf 7 Generation");
 assert.strictEqual(translateTag("Facelift model", "de"), "Facelift Modell");
+assert.strictEqual(translateTag("Automatic DSG", "de"), "DSG-Automatik");
+assert.strictEqual(translateTag("Automatic Tiptronic", "de"), "Tiptronic-Automatik");
+assert.strictEqual(translateTag("Automatic gearbox", "de"), "Automatikgetriebe");
 assert.strictEqual(translateTag("Some phrase we never mapped", "de"), "Some phrase we never mapped");
 
 console.log("matchTags.test.ts: all checks passed");

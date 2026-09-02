@@ -28,6 +28,9 @@ const TAG_DE: Record<string, string> = {
   "manual transmission": "Schaltgetriebe",
   "automatic gearbox": "Automatikgetriebe",
   "automatic transmission": "Automatikgetriebe",
+  "automatic dsg": "DSG-Automatik",
+  "dsg gearbox": "DSG-Getriebe",
+  "dsg transmission": "DSG-Getriebe",
   "under budget": "Im Budget",
   "within budget": "Im Budget",
   "in budget": "Im Budget",
@@ -68,6 +71,9 @@ export function translateTag(tag: string, lang: "en" | "de"): string {
   if ((m = t.match(/^not an? (.+)$/i))) return `Kein ${m[1]}`;
   if ((m = t.match(/^(.+) generation$/i))) return `${m[1]} Generation`;
   if ((m = t.match(/^(.+) model$/i))) return `${m[1]} Modell`;
+  // "Automatic DSG" / "Automatic Tiptronic" etc. — dict catches the plain
+  // "automatic gearbox/transmission" forms first, so this only sees named variants.
+  if ((m = t.match(/^automatic (.+)$/i))) return `${m[1]}-Automatik`;
 
   return tag;
 }
