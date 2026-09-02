@@ -11,6 +11,7 @@ import { recordPrices, diffPrices, daysBetween, PRICE_HISTORY_KEY, type PriceHis
 import { parseMileage } from "@/lib/mileage";
 import { pushRecentSearch } from "@/lib/recentSearches";
 import { cleanMatchTags, translateTag } from "@/lib/matchTags";
+import { cleanListingTitle } from "@/lib/listingTitle";
 import { daysAgo } from "@/lib/age";
 import type { MapListing } from "@/components/ListingsMap";
 import {
@@ -597,7 +598,11 @@ export default function Home() {
           if (savedWant) setWant(savedWant);
           if (typeof at === "string") setSearchedAt(at);
           if (Array.isArray(savedListings)) {
-            const restored = savedListings.map((l: Listing) => ({ ...l, match_tags: cleanMatchTags(l.match_tags) }));
+            const restored = savedListings.map((l: Listing) => ({
+              ...l,
+              title: typeof l.title === "string" ? cleanListingTitle(l.title) : l.title,
+              match_tags: cleanMatchTags(l.match_tags),
+            }));
             setListings(restored);
             // Show price moves vs history without touching it - a plain reopen, not a search.
             setPriceChanges(
@@ -611,7 +616,17 @@ export default function Home() {
     }
     try {
       const rawSaved = localStorage.getItem(SAVED_KEY);
-      if (rawSaved) setSaved(JSON.parse(rawSaved));
+      if (rawSaved) {
+        const parsedSaved = JSON.parse(rawSaved);
+        setSaved(
+          Array.isArray(parsedSaved)
+            ? parsedSaved.map((l: Listing) => ({
+                ...l,
+                title: typeof l.title === "string" ? cleanListingTitle(l.title) : l.title,
+              }))
+            : parsedSaved,
+        );
+      }
     } catch {
       // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
     }
@@ -824,7 +839,12 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(t.searchError);
       const taggedListings = Array.isArray(data.listings)
-        ? data.listings.map((l: Listing) => ({ ...l, want, match_tags: cleanMatchTags(l.match_tags) }))
+        ? data.listings.map((l: Listing) => ({
+            ...l,
+            want,
+            title: typeof l.title === "string" ? cleanListingTitle(l.title) : l.title,
+            match_tags: cleanMatchTags(l.match_tags),
+          }))
         : data.listings;
       setListings(taggedListings);
       const nextRecent = pushRecentSearch(recentSearches, want);
