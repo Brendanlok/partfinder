@@ -43,6 +43,7 @@ type Dict = {
   showingOf: (shown: number, total: number) => string;
   priceRange: (low: string, high: string, typical: string) => string;
   lastChecked: (days: number) => string;
+  resultsUnranked: string;
 
   // Error messages shown in the UI (the Edge Functions only return English, so the
   // client shows its own translated copy instead of surfacing the raw server string)
@@ -207,6 +208,8 @@ export const translations: Record<Lang, Dict> = {
     showingOf: (shown, total) => `Showing ${shown} of ${total} listings`,
     priceRange: (low, high, typical) => `${low}–${high} · typical ${typical}`,
     lastChecked: (days) => `Prices last checked ${days === 1 ? "yesterday" : `${days} days ago`}`,
+    resultsUnranked:
+      "AI ranking is temporarily unavailable, so these results have no match score. The listings are real — open them to see full details.",
 
     searchError: "Search failed. Try again in a moment.",
     conditionError: "Couldn't check this listing. Try again.",
@@ -374,6 +377,8 @@ export const translations: Record<Lang, Dict> = {
     showingOf: (shown, total) => `${shown} von ${total} Anzeigen`,
     priceRange: (low, high, typical) => `${low}–${high} · üblich ${typical}`,
     lastChecked: (days) => `Preise zuletzt ${days === 1 ? "gestern" : `vor ${days} Tagen`} geprüft`,
+    resultsUnranked:
+      "Das KI-Ranking ist vorübergehend nicht verfügbar, daher haben diese Ergebnisse keine Trefferbewertung. Die Anzeigen sind echt — zum Ansehen aller Details öffnen.",
 
     searchError: "Suche fehlgeschlagen. Bitte gleich noch einmal versuchen.",
     conditionError: "Anzeige konnte nicht geprüft werden. Bitte erneut versuchen.",

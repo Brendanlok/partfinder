@@ -269,6 +269,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [listings, setListings] = useState<Listing[] | null>(null);
+  // False when the search backend returned listings but the AI ranking step was down
+  // (Gemini free-tier timeout) - results are real but have no match score/tags.
+  const [ranked, setRanked] = useState(true);
   // ISO time the shown listings were fetched - drives a "prices last checked N days ago"
   // hint after a restore. null right after a fresh search (nothing stale to warn about).
   const [searchedAt, setSearchedAt] = useState<string | null>(null);
@@ -848,6 +851,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     setListings(null);
+    setRanked(true);
     setSearchedAt(null);
     setSortBy("relevance");
     setSourceFilter(new Set());
@@ -868,6 +872,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(t.searchError);
+      setRanked(data.ranked !== false);
       const taggedListings = Array.isArray(data.listings)
         ? data.listings.map((l: Listing) => ({
             ...l,
@@ -1311,6 +1316,12 @@ export default function Home() {
             {sortedListings.length > 0 && sortedListings.length < displayedListings.length && (
               <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                 {t.showingOf(sortedListings.length, displayedListings.length)}
+              </p>
+            )}
+
+            {!ranked && !showSaved && listings && listings.length > 0 && (
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                {t.resultsUnranked}
               </p>
             )}
 

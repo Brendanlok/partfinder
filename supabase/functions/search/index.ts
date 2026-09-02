@@ -395,7 +395,18 @@ async function handleSearch(want: string): Promise<Response> {
     result = (await askGemini()) ?? result;
   }
   if (!result) {
-    return Response.json({ error: "Couldn't read the results, try again." }, { status: 502, headers: corsHeaders });
+    // ponytail: Gemini's free tier gets slow-laned mid-day and times out (observed live
+    // 02.09 - hours of dead searches while Tavily was fine). Tavily already handed us real
+    // ad URLs, titles and images, so return those unranked rather than failing the whole
+    // search. No match_score/match_tags/price parsing; `ranked: false` tells the client to
+    // flag the results as unranked. Upgrade path: a paid Gemini tier (Lok's call).
+    const fallback = rawResults.map((r: { title: string; url: string; image: string | null }) => ({
+      title: cleanListingTitle(r.title),
+      url: r.url,
+      source: sourceFromUrl(r.url),
+      ...(r.image ? { image: r.image } : {}),
+    }));
+    return Response.json({ listings: fallback, ranked: false }, { headers: corsHeaders });
   }
 
   // ponytail: Gemini occasionally echoes a schema field's own name back as its value
