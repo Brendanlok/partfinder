@@ -511,6 +511,7 @@ export default function Home() {
   }
 
   function toggleSaved(listing: Listing) {
+    const removing = !!saved[listing.url];
     setSaved((prev) => {
       const next = { ...prev };
       if (next[listing.url]) delete next[listing.url];
@@ -523,6 +524,16 @@ export default function Home() {
       pushSaved(next); // no-ops when signed out
       return next;
     });
+    // Compare only operates on saved cars - drop an unsaved one so the
+    // "Compare selected (N)" count and the compare strip don't keep a stale
+    // slot that renders as a blank card.
+    if (removing && compareSet.has(listing.url)) {
+      setCompareSet((c) => {
+        const next = new Set(c);
+        next.delete(listing.url);
+        return next;
+      });
+    }
   }
 
   async function handleSendCode() {
