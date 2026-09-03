@@ -8,6 +8,7 @@ import { draftNegotiationMessage } from "@/lib/negotiation";
 import { translations, LANG_KEY, type Lang } from "@/lib/translations";
 import { parsePrice } from "@/lib/price";
 import { recordPrices, diffPrices, daysBetween, PRICE_HISTORY_KEY, type PriceHistory, type PriceChange } from "@/lib/priceHistory";
+import { filterNew, markSeen, SEEN_LISTINGS_KEY } from "@/lib/seenListings";
 import { parseMileage } from "@/lib/mileage";
 import { pushRecentSearch } from "@/lib/recentSearches";
 import { cleanMatchTags, translateTag } from "@/lib/matchTags";
@@ -242,6 +243,14 @@ export default function Home() {
     return n !== null && /^[\s€.,\d]+$/.test(price) ? `${nf(n)} €` : price;
   };
   const todayISO = new Date().toISOString().slice(0, 10);
+  // "New" pill for a listing that has never turned up in one of this user's past searches.
+  // Only set on a fresh search (not restore) and only from the second search on.
+  const newBadge = (url: string) =>
+    newUrls.has(url) ? (
+      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+        {t.newListing}
+      </span>
+    ) : null;
   // Small "▼ €500 cheaper (3 days ago)" badge for a listing whose price moved since a
   // past search of ours returned it. Nothing to show for first-time or unchanged listings.
   const priceChangeBadge = (url: string) => {
@@ -317,6 +326,11 @@ export default function Home() {
   // this search's diffs, keyed by listing URL, for the card badge.
   const priceHistoryRef = useRef<PriceHistory>({});
   const [priceChanges, setPriceChanges] = useState<Record<string, PriceChange>>({});
+  // Browser-local memory of every listing URL ever surfaced here. The ref holds the full
+  // list (touched only at search time); the state holds just the URLs that were new in
+  // this search, for the "New" card pill. Empty until the user's second-ever search.
+  const seenListingsRef = useRef<string[]>([]);
+  const [newUrls, setNewUrls] = useState<Set<string>>(new Set());
   // Optional cross-device sync. `syncEmail` non-null = signed in. All sync state lives
   // here; the app is fully usable with this untouched (saved stays in localStorage).
   const [syncEmail, setSyncEmail] = useState<string | null>(null);
@@ -630,6 +644,13 @@ export default function Home() {
     } catch {
       // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
     }
+    try {
+      const rawSeen = localStorage.getItem(SEEN_LISTINGS_KEY);
+      const parsed = rawSeen ? JSON.parse(rawSeen) : [];
+      if (Array.isArray(parsed)) seenListingsRef.current = parsed.filter((u): u is string => typeof u === "string");
+    } catch {
+      // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
+    }
     const sharedWant = new URLSearchParams(window.location.search).get("q");
     if (sharedWant) {
       setWant(sharedWant);
@@ -887,6 +908,7 @@ export default function Home() {
     setHideDuplicates(false);
     setShowSaved(false);
     setPriceChanges({});
+    setNewUrls(new Set());
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_SEARCH_FUNCTION_URL as string, {
         method: "POST",
@@ -922,6 +944,15 @@ export default function Home() {
       );
       priceHistoryRef.current = history;
       setPriceChanges(changes);
+      // Flag listings this user has never had surface in any past search. Only from the
+      // user's second search on - on a fresh browser every result is trivially "new", so
+      // the empty seen-list stays a no-op for the first search.
+      const resultUrls = (Array.isArray(taggedListings) ? taggedListings : []).map((l: Listing) => l.url);
+      if (seenListingsRef.current.length > 0) {
+        setNewUrls(new Set(filterNew(seenListingsRef.current, resultUrls)));
+      }
+      const nextSeen = markSeen(seenListingsRef.current, resultUrls);
+      seenListingsRef.current = nextSeen;
       try {
         localStorage.setItem(
           LAST_SEARCH_KEY,
@@ -929,6 +960,7 @@ export default function Home() {
         );
         localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(nextRecent));
         localStorage.setItem(PRICE_HISTORY_KEY, JSON.stringify(history));
+        localStorage.setItem(SEEN_LISTINGS_KEY, JSON.stringify(nextSeen));
       } catch {
         // ponytail: storage full/unavailable, non-critical
       }
@@ -1458,6 +1490,7 @@ export default function Home() {
                           {badge === "below" ? t.priceBelow : t.priceAbove}
                         </span>
                       )}
+                      {newBadge(l.url)}
                       {priceChangeBadge(l.url)}
                       {l.year && <span>{l.year}</span>}
                       {l.mileage_km && <span>{fmtKm(l.mileage_km)} km</span>}
@@ -1615,6 +1648,7 @@ export default function Home() {
                       {badge === "below" ? t.priceBelow : t.priceAbove}
                     </span>
                   )}
+                  {newBadge(l.url)}
                   {priceChangeBadge(l.url)}
                   {l.year && <span>{l.year}</span>}
                   {l.mileage_km && <span>{fmtKm(l.mileage_km)} km</span>}

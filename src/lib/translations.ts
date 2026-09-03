@@ -65,6 +65,7 @@ type Dict = {
   priceDropSince: (amount: string, since: string) => string;
   priceRiseSince: (amount: string, since: string) => string;
   priceChangeTitle: string;
+  newListing: string;
   sinceDays: (n: number) => string;
   perYearSuffix: string; // " km/yr" / " km/Jahr"
   kmPerYearTitle: string;
@@ -230,6 +231,7 @@ export const translations: Record<Lang, Dict> = {
     priceDropSince: (amount, since) => `▼ ${amount} cheaper (${since})`,
     priceRiseSince: (amount, since) => `▲ ${amount} dearer (${since})`,
     priceChangeTitle: "Change vs the price this listing showed the last time your search returned it",
+    newListing: "New",
     sinceDays: (n) => (n <= 0 ? "today" : n === 1 ? "yesterday" : `${n} days ago`),
     perYearSuffix: " km/yr",
     kmPerYearTitle: "Average distance per year - the German TÜV benchmark is about 15,000 km/yr",
@@ -401,6 +403,7 @@ export const translations: Record<Lang, Dict> = {
     priceDropSince: (amount, since) => `▼ ${amount} günstiger (${since})`,
     priceRiseSince: (amount, since) => `▲ ${amount} teurer (${since})`,
     priceChangeTitle: "Änderung gegenüber dem Preis, den diese Anzeige bei deiner letzten Suche hatte",
+    newListing: "Neu",
     sinceDays: (n) => (n <= 0 ? "heute" : n === 1 ? "gestern" : `vor ${n} Tagen`),
     perYearSuffix: " km/Jahr",
     kmPerYearTitle: "Durchschnittliche Fahrleistung pro Jahr - der TÜV-Richtwert liegt bei etwa 15.000 km/Jahr",
