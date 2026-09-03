@@ -1,6 +1,6 @@
 // Runs server-side on Supabase Edge Functions (Deno). Keeps TAVILY_API_KEY / GEMINI_API_KEY
 // secret - only the anon/publishable key (safe to expose) reaches the static frontend.
-import { cleanListingTitle } from "./title.ts";
+import { cleanListingTitle, looksLikeModelCar } from "./title.ts";
 
 const LISTING_SITES = ["mobile.de", "autoscout24.de", "kleinanzeigen.de"];
 
@@ -264,10 +264,10 @@ async function handleSearch(want: string): Promise<Response> {
     .filter((r: unknown): r is { title: string; url: string; content: string; image: string | null } => !!r);
 
   const seenUrls = new Set<string>();
-  const rawResults = [...directResults, ...crawledResults].filter((r: { url: string }) => {
+  const rawResults = [...directResults, ...crawledResults].filter((r: { title: string; url: string }) => {
     if (seenUrls.has(r.url)) return false;
     seenUrls.add(r.url);
-    return true;
+    return !looksLikeModelCar(r.title);
   });
 
   // Image is real metadata fetched straight from each ad's own page, not something Gemini
