@@ -798,7 +798,17 @@ export default function Home() {
         body: JSON.stringify({ url: listing.url, want: listing.want ?? want }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(res.status === 422 ? t.conditionUnavailableMobile : t.conditionError);
+      if (!res.ok) {
+        // The verdict function returns 422 for two unrelated cases: mobile.de host block,
+        // and a non-mobile listing where no photos could be found. Only the URL tells them
+        // apart on the client - a 422 on an autoscout24/kleinanzeigen listing means no photos.
+        if (res.status === 422) {
+          throw new Error(
+            listing.url.includes("mobile.de") ? t.conditionUnavailableMobile : t.conditionNoPhotos
+          );
+        }
+        throw new Error(t.conditionError);
+      }
       setVerdicts((v) => ({ ...v, [listing.url]: { data } }));
     } catch (e) {
       setVerdicts((v) => ({

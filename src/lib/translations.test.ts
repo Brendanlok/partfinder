@@ -35,7 +35,7 @@ assert.strictEqual(translations.de.lastChecked(1), "Preise zuletzt gestern geprÃ
 
 // UI error strings must be non-empty in both languages (shown instead of the
 // English-only Edge Function error).
-for (const k of ["searchError", "conditionError", "conditionUnavailableMobile", "partsError", "stepsError"] as const) {
+for (const k of ["searchError", "conditionError", "conditionUnavailableMobile", "conditionNoPhotos", "partsError", "stepsError"] as const) {
   assert.ok(translations.en[k].length > 0 && translations.de[k].length > 0, `${k} must be set in both languages`);
   assert.notStrictEqual(translations.en[k], translations.de[k], `${k} should actually be translated`);
 }

@@ -50,6 +50,7 @@ type Dict = {
   searchError: string;
   conditionError: string;
   conditionUnavailableMobile: string;
+  conditionNoPhotos: string;
   partsError: string;
   stepsError: string;
 
@@ -216,6 +217,7 @@ export const translations: Record<Lang, Dict> = {
     conditionError: "Couldn't check this listing. Try again.",
     conditionUnavailableMobile:
       "mobile.de blocks automated access, so photo condition checks aren't available for its listings yet.",
+    conditionNoPhotos: "Couldn't find any photos on this listing to check.",
     partsError: "Couldn't estimate parts cost. Try again.",
     stepsError: "Couldn't load repair steps. Try again.",
 
@@ -386,6 +388,7 @@ export const translations: Record<Lang, Dict> = {
     conditionError: "Anzeige konnte nicht geprüft werden. Bitte erneut versuchen.",
     conditionUnavailableMobile:
       "mobile.de sperrt automatische Zugriffe, daher sind Zustandsprüfungen anhand der Fotos für mobile.de-Anzeigen noch nicht verfügbar.",
+    conditionNoPhotos: "In dieser Anzeige wurden keine Fotos zum Prüfen gefunden.",
     partsError: "Teilekosten konnten nicht geschätzt werden. Bitte erneut versuchen.",
     stepsError: "Reparaturschritte konnten nicht geladen werden. Bitte erneut versuchen.",
 
