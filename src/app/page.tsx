@@ -637,6 +637,11 @@ export default function Home() {
               match_tags: cleanMatchTags(l.match_tags),
             }));
             setListings(restored);
+            // A Gemini-timeout fallback search stores listings with no match_score. The
+            // `ranked: false` flag isn't persisted, so re-derive it here - otherwise a
+            // restored fallback search drops the "AI ranking unavailable" notice and its
+            // raw unranked results look verified.
+            setRanked(restored.some((l: Listing) => typeof l.match_score === "number"));
             // Show price moves vs history without touching it - a plain reopen, not a search.
             setPriceChanges(
               diffPrices(priceHistoryRef.current, restored.map((l: Listing) => ({ url: l.url, price: parsePrice(l.price) }))),
