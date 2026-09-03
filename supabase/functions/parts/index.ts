@@ -17,11 +17,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ponytail: same per-fetch deadline search/index.ts already uses - a hung Tavily/Gemini
+// connection would otherwise stall the request until Supabase's ~150s platform kill.
+// AbortSignal.timeout throws on expiry; every caller here is already inside a try/catch.
+const timedFetch = (url: string, opts: RequestInit, ms: number) =>
+  fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });
+
 type TavilyResult = { title: string; url: string; content: string };
 
 async function searchOne(issue: string, germanQuery: string): Promise<{ issue: string; results: TavilyResult[] }> {
   try {
-    const res = await fetch("https://api.tavily.com/search", {
+    const res = await timedFetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -31,7 +37,7 @@ async function searchOne(issue: string, germanQuery: string): Promise<{ issue: s
         search_depth: "basic",
         max_results: 5,
       }),
-    });
+    }, 30000);
     if (!res.ok) return { issue, results: [] };
     const data = await res.json();
     return { issue, results: (data.results ?? []).slice(0, 3) };
@@ -47,7 +53,7 @@ async function searchOne(issue: string, germanQuery: string): Promise<{ issue: s
 async function toGermanPartQueries(issues: string[], want: string): Promise<Record<string, string>> {
   const fallback = Object.fromEntries(issues.map((i) => [i, `${i} ${want} Ersatzteil kaufen`]));
   try {
-    const res = await fetch(
+    const res = await timedFetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
       {
         method: "POST",
@@ -82,7 +88,8 @@ async function toGermanPartQueries(issues: string[], want: string): Promise<Reco
             },
           },
         }),
-      }
+      },
+      20000
     );
     if (!res.ok) return fallback;
     const data = await res.json();
@@ -138,7 +145,7 @@ async function handleParts(capped: string[], carDescription: string): Promise<Re
     );
   }
 
-  const geminiRes = await fetch(
+  const geminiRes = await timedFetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
     {
       method: "POST",
@@ -181,7 +188,8 @@ async function handleParts(capped: string[], carDescription: string): Promise<Re
           },
         },
       }),
-    }
+    },
+    30000
   );
   if (!geminiRes.ok) {
     return Response.json({ error: "Couldn't estimate parts cost, try again." }, { status: 502, headers: corsHeaders });

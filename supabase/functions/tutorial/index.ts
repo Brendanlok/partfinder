@@ -6,6 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ponytail: same per-fetch deadline search/index.ts already uses - a hung Gemini/YouTube
+// connection would otherwise stall the request until Supabase's ~150s platform kill.
+// AbortSignal.timeout throws on expiry; the serve-level try/catch and the YouTube block
+// already handle a throw.
+const timedFetch = (url: string, opts: RequestInit, ms: number) =>
+  fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -35,7 +42,7 @@ Deno.serve(async (req: Request) => {
 async function handleTutorial(issue: string, want: unknown): Promise<Response> {
   const prompt = `A used car buyer found this issue: "${issue}" on a car they're considering (${want || "a used car"}).\n\nGive short, practical DIY-oriented repair steps - a numbered list, 3-6 steps, plain language, assume basic tools and no prior experience. If this issue genuinely isn't a reasonable DIY job, say so in one step instead of forcing a walkthrough. Return JSON only.`;
 
-  const geminiRes = await fetch(
+  const geminiRes = await timedFetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
     {
       method: "POST",
@@ -51,7 +58,8 @@ async function handleTutorial(issue: string, want: unknown): Promise<Response> {
           },
         },
       }),
-    }
+    },
+    30000
   );
   if (!geminiRes.ok) {
     return Response.json({ error: "Couldn't write up repair steps, try again." }, { status: 502, headers: corsHeaders });
@@ -71,10 +79,12 @@ async function handleTutorial(issue: string, want: unknown): Promise<Response> {
   // the written steps alone are still useful.
   let video: { title: string; url: string; thumbnail: string } | null = null;
   try {
-    const ytRes = await fetch(
+    const ytRes = await timedFetch(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&type=video&safeSearch=strict&q=${encodeURIComponent(
         `how to fix ${issue} car repair tutorial`
-      )}&key=${Deno.env.get("YOUTUBE_API_KEY")}`
+      )}&key=${Deno.env.get("YOUTUBE_API_KEY")}`,
+      {},
+      8000
     );
     if (ytRes.ok) {
       const ytData = await ytRes.json();

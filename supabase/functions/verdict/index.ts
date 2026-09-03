@@ -9,6 +9,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ponytail: same per-fetch deadline search/index.ts already uses. The marketplaces throttle
+// datacenter traffic and Gemini's free tier gets slow-laned mid-day - without this a hung
+// connection stalls the whole request until Supabase's ~150s platform kill and the user
+// just sees "Couldn't read the photos" two minutes later. AbortSignal.timeout throws on
+// expiry, which every caller here already catches.
+const timedFetch = (url: string, opts: RequestInit, ms: number) =>
+  fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });
+
 function extractMetaTags(html: string): string[] {
   return [...html.matchAll(/<meta[^>]+>/g)].map((m) => m[0]);
 }
@@ -52,7 +60,7 @@ function extractDescription(html: string): string {
 
 async function toInlineImage(url: string): Promise<{ mimeType: string; data: string } | null> {
   try {
-    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    const res = await timedFetch(url, { headers: { "User-Agent": UA } }, 8000);
     if (!res.ok) return null;
     const mimeType = res.headers.get("content-type")?.split(";")[0] || "image/jpeg";
     const bytes = new Uint8Array(await res.arrayBuffer());
@@ -105,9 +113,9 @@ Deno.serve(async (req: Request) => {
 });
 
 async function handleVerdict(url: string, hostname: string, want: unknown): Promise<Response> {
-  const pageRes = await fetch(url, {
+  const pageRes = await timedFetch(url, {
     headers: { "User-Agent": UA, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8" },
-  });
+  }, 10000);
   if (!pageRes.ok) {
     return Response.json({ error: "Couldn't load that listing page." }, { status: 502, headers: corsHeaders });
   }
@@ -129,7 +137,7 @@ async function handleVerdict(url: string, hostname: string, want: unknown): Prom
 
   const prompt = `A buyer wants this car: "${want || "a used car"}"\n\nListing description: "${description}"\n\nLook closely at the attached photos of this specific vehicle for anything visible that matters to a buyer - rust, dents, panel gaps/mismatched paint, worn or damaged interior, tyre wear, dashboard warning lights, missing parts, modification signs. Give a short, honest, ballpark read. For each issue found, rate whether fixing it is realistically a "diy" job (basic tools, a weekend, common skill level) or needs a "garage" (special tools, lift, expertise, or safety-critical - brakes, suspension, structural rust). Note this is a visual check only from listing photos, not a substitute for an in-person inspection or vehicle history check.\n\nReturn JSON only.`;
 
-  const geminiRes = await fetch(
+  const geminiRes = await timedFetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`,
     {
       method: "POST",
@@ -159,7 +167,8 @@ async function handleVerdict(url: string, hostname: string, want: unknown): Prom
           },
         },
       }),
-    }
+    },
+    45000
   );
   if (!geminiRes.ok) {
     return Response.json({ error: "Couldn't read the photos, try again." }, { status: 502, headers: corsHeaders });
