@@ -297,6 +297,11 @@ export default function Home() {
   // Off by default - collapsing cross-posted listings is a judgment call (which listing
   // "wins") that not every user wants made for them, so it's an opt-in view, not the default.
   const [hideDuplicates, setHideDuplicates] = useState(false);
+  // Opt-in like hideDuplicates - repeat searches often turn up mostly-familiar results,
+  // and only some users care to filter those out. Gated in the UI on newUrls actually
+  // having entries (see availableSortOptions reasoning), so it never shows on a first
+  // search or in Saved view where "new" isn't a meaningful idea.
+  const [showOnlyNew, setShowOnlyNew] = useState(false);
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -906,6 +911,7 @@ export default function Home() {
     setMinPrice("");
     setMaxPrice("");
     setHideDuplicates(false);
+    setShowOnlyNew(false);
     setShowSaved(false);
     setPriceChanges({});
     setNewUrls(new Set());
@@ -1001,6 +1007,7 @@ export default function Home() {
     ? displayedListings.filter((l) => {
         if (sourceFilter.has(l.source)) return false;
         if (l.fuel && fuelFilter.has(l.fuel)) return false;
+        if (showOnlyNew && !newUrls.has(l.url)) return false;
         if (minPrice || maxPrice) {
           const p = parsePrice(l.price);
           if (p !== null && minPrice && p < Number(minPrice)) return false;
@@ -1144,6 +1151,7 @@ export default function Home() {
                 setFuelFilter(new Set());
                 setMinPrice("");
                 setMaxPrice("");
+                setShowOnlyNew(false);
                 setCompareSet(new Set());
                 setShowCompare(false);
                 setShowSaved((s) => !s);
@@ -1331,6 +1339,20 @@ export default function Home() {
                     className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
                   />
                   {t.hideDuplicates}
+                </label>
+              )}
+              {!showSaved && newUrls.size > 0 && (
+                <label
+                  className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400"
+                  title={t.showOnlyNewTitle}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showOnlyNew}
+                    onChange={(e) => setShowOnlyNew(e.target.checked)}
+                    className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                  />
+                  {t.showOnlyNew}
                 </label>
               )}
               {listingsHaveLocation && (

@@ -35,6 +35,8 @@ type Dict = {
   partsBuildCostTitle: string;
   hideDuplicates: string;
   hideDuplicatesTitle: string;
+  showOnlyNew: string;
+  showOnlyNewTitle: string;
   shareSearch: string;
   shareListing: string;
   copied: string;
@@ -203,6 +205,8 @@ export const translations: Record<Lang, Dict> = {
     partsBuildCostTitle: "Ad price only, or also look up parts to fix up the car and build a shopping list",
     hideDuplicates: "Hide duplicates",
     hideDuplicatesTitle: "Show one card per car, not one per site it's cross-posted on",
+    showOnlyNew: "Only new",
+    showOnlyNewTitle: "Show only listings that weren't in any of your past searches",
     shareSearch: "🔗 Share search",
     shareListing: "🔗 Share this car",
     copied: "Copied!",
@@ -375,6 +379,8 @@ export const translations: Record<Lang, Dict> = {
     partsBuildCostTitle: "Nur Anzeigenpreis, oder zusätzlich Ersatzteile für Reparaturen nachschlagen und eine Einkaufsliste erstellen",
     hideDuplicates: "Duplikate ausblenden",
     hideDuplicatesTitle: "Nur eine Karte pro Auto zeigen, nicht eine pro Seite, auf der es doppelt inseriert ist",
+    showOnlyNew: "Nur neue",
+    showOnlyNewTitle: "Nur Anzeigen zeigen, die in keiner früheren Suche dabei waren",
     shareSearch: "🔗 Suche teilen",
     shareListing: "🔗 Dieses Auto teilen",
     copied: "Kopiert!",
