@@ -48,6 +48,7 @@ type Dict = {
   // Error messages shown in the UI (the Edge Functions only return English, so the
   // client shows its own translated copy instead of surfacing the raw server string)
   searchError: string;
+  searchRateLimited: string;
   conditionError: string;
   conditionUnavailableMobile: string;
   conditionNoPhotos: string;
@@ -215,6 +216,7 @@ export const translations: Record<Lang, Dict> = {
       "AI ranking is temporarily unavailable, so these results have no match score. The listings are real — open them to see full details.",
 
     searchError: "Search failed. Try again in a moment.",
+    searchRateLimited: "Too many searches. Wait a minute and try again.",
     conditionError: "Couldn't check this listing. Try again.",
     conditionUnavailableMobile:
       "mobile.de blocks automated access, so photo condition checks aren't available for its listings yet.",
@@ -387,6 +389,7 @@ export const translations: Record<Lang, Dict> = {
       "Das KI-Ranking ist vorübergehend nicht verfügbar, daher haben diese Ergebnisse keine Trefferbewertung. Die Anzeigen sind echt — zum Ansehen aller Details öffnen.",
 
     searchError: "Suche fehlgeschlagen. Bitte gleich noch einmal versuchen.",
+    searchRateLimited: "Zu viele Suchen. Warte eine Minute und versuche es erneut.",
     conditionError: "Anzeige konnte nicht geprüft werden. Bitte erneut versuchen.",
     conditionUnavailableMobile:
       "mobile.de sperrt automatische Zugriffe, daher sind Zustandsprüfungen anhand der Fotos für mobile.de-Anzeigen noch nicht verfügbar.",

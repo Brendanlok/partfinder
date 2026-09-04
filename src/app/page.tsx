@@ -919,7 +919,7 @@ export default function Home() {
         body: JSON.stringify({ want }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(t.searchError);
+      if (!res.ok) throw new Error(res.status === 429 ? t.searchRateLimited : t.searchError);
       setRanked(data.ranked !== false);
       const taggedListings = Array.isArray(data.listings)
         ? data.listings.map((l: Listing) => ({

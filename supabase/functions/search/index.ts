@@ -127,9 +127,36 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ponytail: in-memory sliding-window limit per client IP. The real threat (per the
+// board item) is one script hammering this public, keyless URL to drain the shared
+// free-tier Tavily/Gemini quota - this stops that with no DB call and no dependency.
+// Ceiling: the counter lives in one warm isolate, so it won't see abuse spread across
+// many IPs or survive a cold start. Upgrade path: a Postgres-backed counter if
+// distributed abuse ever actually shows up.
+const RATE_LIMIT = 12; // searches per IP...
+const RATE_WINDOW_MS = 60_000; // ...per minute
+const rateHits = new Map<string, number[]>();
+
+function rateLimited(req: Request): boolean {
+  const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+  const now = Date.now();
+  const recent = (rateHits.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  recent.push(now);
+  rateHits.set(ip, recent);
+  // keep the map from growing without bound in a long-lived isolate
+  if (rateHits.size > 5000) {
+    for (const [k, v] of rateHits) if (v.every((t) => now - t >= RATE_WINDOW_MS)) rateHits.delete(k);
+  }
+  return recent.length > RATE_LIMIT;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (rateLimited(req)) {
+    return Response.json({ error: "Too many searches." }, { status: 429, headers: corsHeaders });
   }
 
   let body: Record<string, unknown>;
