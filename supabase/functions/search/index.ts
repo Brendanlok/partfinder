@@ -127,34 +127,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ponytail: in-memory only - resets on cold start, not shared across isolates. This
-// isn't a real DDoS defence; it's the cheap stop for the one threat that exists today
-// (the URL isn't advertised, so the realistic abuse is a single script hammering the
-// endpoint in a loop - which reuses one warm isolate and gets caught here). Each search
-// spends 1 Tavily credit from a shared 1,000/month pool, so cap a single IP well below
-// what a human tester needs. Upgrade path if real abuse shows up: a Postgres-backed
-// counter keyed on IP (SUPABASE_SERVICE_ROLE_KEY is already in the function env).
-const RL_MAX = 20;
-const RL_WINDOW_MS = 60 * 60 * 1000;
-const rlHits = new Map<string, number[]>();
-function rateLimited(ip: string): boolean {
-  if (rlHits.size > 1000) rlHits.clear(); // ponytail: crude cap so one isolate can't grow unbounded
-  const now = Date.now();
-  const recent = (rlHits.get(ip) ?? []).filter((t) => now - t < RL_WINDOW_MS);
-  recent.push(now);
-  rlHits.set(ip, recent);
-  return recent.length > RL_MAX;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
-  }
-
-  const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
-  if (rateLimited(ip)) {
-    console.error("search: rate limited", ip);
-    return Response.json({ error: "Too many searches, wait a bit." }, { status: 429, headers: corsHeaders });
   }
 
   let body: Record<string, unknown>;
