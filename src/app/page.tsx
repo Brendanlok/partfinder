@@ -1385,6 +1385,7 @@ export default function Home() {
                     setFuelFilter(new Set());
                     setMinPrice("");
                     setMaxPrice("");
+                    setShowOnlyNew(false);
                   }}
                   className="font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                 >
