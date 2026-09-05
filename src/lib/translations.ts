@@ -37,6 +37,10 @@ type Dict = {
   hideDuplicatesTitle: string;
   showOnlyNew: string;
   showOnlyNewTitle: string;
+  hideListing: string;
+  restoreListing: string;
+  hiddenListingsShow: (n: number) => string;
+  hiddenListingsCollapse: string;
   shareSearch: string;
   shareListing: string;
   copied: string;
@@ -207,6 +211,10 @@ export const translations: Record<Lang, Dict> = {
     hideDuplicatesTitle: "Show one card per car, not one per site it's cross-posted on",
     showOnlyNew: "Only new",
     showOnlyNewTitle: "Show only listings that weren't in any of your past searches",
+    hideListing: "Not interested — hide this listing",
+    restoreListing: "Show this listing again",
+    hiddenListingsShow: (n) => `${n} hidden — show`,
+    hiddenListingsCollapse: "Hide dismissed again",
     shareSearch: "🔗 Share search",
     shareListing: "🔗 Share this car",
     copied: "Copied!",
@@ -381,6 +389,10 @@ export const translations: Record<Lang, Dict> = {
     hideDuplicatesTitle: "Nur eine Karte pro Auto zeigen, nicht eine pro Seite, auf der es doppelt inseriert ist",
     showOnlyNew: "Nur neue",
     showOnlyNewTitle: "Nur Anzeigen zeigen, die in keiner früheren Suche dabei waren",
+    hideListing: "Kein Interesse — Anzeige ausblenden",
+    restoreListing: "Anzeige wieder anzeigen",
+    hiddenListingsShow: (n) => `${n} ausgeblendet — anzeigen`,
+    hiddenListingsCollapse: "Ausgeblendete wieder verbergen",
     shareSearch: "🔗 Suche teilen",
     shareListing: "🔗 Dieses Auto teilen",
     copied: "Kopiert!",

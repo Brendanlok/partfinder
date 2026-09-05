@@ -9,6 +9,7 @@ import { translations, LANG_KEY, type Lang } from "@/lib/translations";
 import { parsePrice } from "@/lib/price";
 import { recordPrices, diffPrices, daysBetween, PRICE_HISTORY_KEY, type PriceHistory, type PriceChange } from "@/lib/priceHistory";
 import { filterNew, markSeen, SEEN_LISTINGS_KEY } from "@/lib/seenListings";
+import { toggleHidden, HIDDEN_LISTINGS_KEY } from "@/lib/hiddenListings";
 import { parseMileage } from "@/lib/mileage";
 import { pushRecentSearch } from "@/lib/recentSearches";
 import { cleanMatchTags, translateTag } from "@/lib/matchTags";
@@ -336,6 +337,10 @@ export default function Home() {
   // this search, for the "New" card pill. Empty until the user's second-ever search.
   const seenListingsRef = useRef<string[]>([]);
   const [newUrls, setNewUrls] = useState<Set<string>>(new Set());
+  // Listings the user tapped "not interested" on. Browser-local, keyed by URL, spans
+  // searches like `saved` - filtered out of live results unless `showHidden` is on.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(false);
   // Optional cross-device sync. `syncEmail` non-null = signed in. All sync state lives
   // here; the app is fully usable with this untouched (saved stays in localStorage).
   const [syncEmail, setSyncEmail] = useState<string | null>(null);
@@ -555,6 +560,18 @@ export default function Home() {
     }
   }
 
+  function toggleHiddenListing(url: string) {
+    setHidden((prev) => {
+      const next = new Set(toggleHidden([...prev], url));
+      try {
+        localStorage.setItem(HIDDEN_LISTINGS_KEY, JSON.stringify([...next]));
+      } catch {
+        // ponytail: storage full/unavailable, non-critical
+      }
+      return next;
+    });
+  }
+
   async function handleSendCode() {
     const email = syncInputEmail.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -653,6 +670,15 @@ export default function Home() {
       const rawSeen = localStorage.getItem(SEEN_LISTINGS_KEY);
       const parsed = rawSeen ? JSON.parse(rawSeen) : [];
       if (Array.isArray(parsed)) seenListingsRef.current = parsed.filter((u): u is string => typeof u === "string");
+    } catch {
+      // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
+    }
+    try {
+      const rawHidden = localStorage.getItem(HIDDEN_LISTINGS_KEY);
+      const parsed = rawHidden ? JSON.parse(rawHidden) : [];
+      if (Array.isArray(parsed)) {
+        setHidden(new Set(parsed.filter((u): u is string => typeof u === "string")));
+      }
     } catch {
       // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
     }
@@ -914,6 +940,7 @@ export default function Home() {
     setMaxPrice("");
     setHideDuplicates(false);
     setShowOnlyNew(false);
+    setShowHidden(false);
     setShowSaved(false);
     setPriceChanges({});
     setNewUrls(new Set());
@@ -1009,6 +1036,9 @@ export default function Home() {
     ? displayedListings.filter((l) => {
         if (sourceFilter.has(l.source)) return false;
         if (l.fuel && fuelFilter.has(l.fuel)) return false;
+        // Dismissed listings drop out of live results (never the Saved view) unless the
+        // user has flipped "show hidden" to get at the restore button.
+        if (!showSaved && !showHidden && hidden.has(l.url)) return false;
         if (showOnlyNew && !newUrls.has(l.url)) return false;
         if (minPrice || maxPrice) {
           const p = parsePrice(l.price);
@@ -1058,6 +1088,11 @@ export default function Home() {
   // searches, so without it a search whose results carry no location would render the
   // map (0 pins) with its "back to list" toggle hidden, trapping the user in map view.
   const listingsHaveLocation = sortedListings.some((l) => l.location && l.location.trim());
+  // How many of THIS search's results the user has dismissed - drives the "N hidden"
+  // toggle. Only meaningful on live results (Saved view never hides).
+  const hiddenInResults = !showSaved
+    ? (listings ?? []).filter((l) => hidden.has(l.url)).length
+    : 0;
 
   // Step through the visible (sorted+filtered) list from inside the detail modal, so a
   // phone user browsing many cars doesn't have to close and re-tap each card. All the
@@ -1375,6 +1410,15 @@ export default function Home() {
                   {copied ? t.copied : t.shareSearch}
                 </button>
               )}
+              {hiddenInResults > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowHidden((v) => !v)}
+                  className="text-sm text-zinc-500 underline decoration-zinc-400 underline-offset-2 dark:text-zinc-400"
+                >
+                  {showHidden ? t.hiddenListingsCollapse : t.hiddenListingsShow(hiddenInResults)}
+                </button>
+              )}
             </div>
 
             {sortedListings.length === 0 && (
@@ -1434,7 +1478,7 @@ export default function Home() {
               const price = parsePrice(l.price);
               const badge = median && price ? priceBadge(price, median) : null;
               return (
-              <li key={l.url} className="relative">
+              <li key={l.url} className={`relative ${!showSaved && hidden.has(l.url) ? "opacity-50" : ""}`}>
                 {showSaved && (
                   // Sibling of the modal-open button below, not nested inside it - an
                   // <input> inside a <button> is invalid HTML and would also trigger
@@ -1449,6 +1493,17 @@ export default function Home() {
                     />
                     {t.compare}
                   </label>
+                )}
+                {!showSaved && (
+                  <button
+                    type="button"
+                    onClick={() => toggleHiddenListing(l.url)}
+                    aria-label={hidden.has(l.url) ? t.restoreListing : t.hideListing}
+                    title={hidden.has(l.url) ? t.restoreListing : t.hideListing}
+                    className="absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-sm leading-none text-white hover:bg-black/70"
+                  >
+                    {hidden.has(l.url) ? "↺" : "✕"}
+                  </button>
                 )}
                 <button
                   type="button"
