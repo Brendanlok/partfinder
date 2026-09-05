@@ -693,14 +693,16 @@ export default function Home() {
       const rawSaved = localStorage.getItem(SAVED_KEY);
       if (rawSaved) {
         const parsedSaved = JSON.parse(rawSaved);
-        setSaved(
-          Array.isArray(parsedSaved)
-            ? parsedSaved.map((l: Listing) => ({
-                ...l,
-                title: typeof l.title === "string" ? cleanListingTitle(l.title) : l.title,
-              }))
-            : parsedSaved,
-        );
+        // `saved` has always been an id-keyed object (never an array - confirmed via git
+        // history), so a prior `Array.isArray(parsedSaved)` check here was dead code and
+        // the title re-clean it gated never actually ran on real saved-listing data.
+        if (parsedSaved && typeof parsedSaved === "object") {
+          const cleaned: Record<string, Listing> = {};
+          for (const [url, l] of Object.entries(parsedSaved as Record<string, Listing>)) {
+            cleaned[url] = { ...l, title: typeof l.title === "string" ? cleanListingTitle(l.title) : l.title };
+          }
+          setSaved(cleaned);
+        }
       }
     } catch {
       // ponytail: corrupt/old-shape localStorage data, ignore and start fresh
