@@ -91,3 +91,40 @@ async function flushPush(): Promise<void> {
     .from("user_saved")
     .upsert({ user_id: userId, data: payload, updated_at: new Date().toISOString() });
 }
+
+// A tab close/hide can happen mid-debounce, and a normal fetch can be cancelled by the
+// browser once the page starts unloading - so the last save/unsave toggle before close
+// can silently never reach Supabase (local save is unaffected, only cross-device sync).
+// `keepalive: true` tells the browser to let the request finish in the background, but
+// that flag isn't exposed through the supabase-js query builder, so this bypasses it
+// with a raw PostgREST call for this one case only.
+async function flushPushKeepalive(): Promise<void> {
+  if (pushTimer === null || pending === null || !url || !key) return;
+  clearTimeout(pushTimer);
+  pushTimer = null;
+  const payload = pending;
+  pending = null;
+  const c = getClient();
+  const { data: sess } = await c?.auth.getSession() ?? {};
+  const token = sess?.session?.access_token;
+  const userId = sess?.session?.user.id;
+  if (!token || !userId) return;
+  fetch(`${url}/rest/v1/user_saved`, {
+    method: "POST",
+    keepalive: true,
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates",
+    },
+    body: JSON.stringify({ user_id: userId, data: payload, updated_at: new Date().toISOString() }),
+  }).catch(() => {});
+}
+
+if (typeof window !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPushKeepalive();
+  });
+  window.addEventListener("pagehide", () => flushPushKeepalive());
+}
