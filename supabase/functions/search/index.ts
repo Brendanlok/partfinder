@@ -92,16 +92,21 @@ async function fetchListingSnippet(url: string): Promise<{ title: string; conten
     if (!res.ok) return null;
     const html = await res.text();
     let title = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]*)"/)?.[1];
-    // autoscout24's og:title is a useless generic "Volkswagen für € 20.990" (confirmed live:
-    // every autoscout24 result card showed that instead of the model). The real model/body/
-    // colour is only in the <title> tag - "VW Golf GTI Limousine in Schwarz gebraucht in
-    // Schnaittach für € 20.990" - so use that, minus its "gebraucht in <city>" / "für € <n>" tail.
+    // autoscout24's og:title is a useless generic "Volkswagen für € 20.990", and its <title>
+    // collapses every trim to the base model - "Volkswagen Golf GTI Limousine in Weiß" came
+    // back identical for a base GTI, a Performance and a Clubsport in the same search (confirmed
+    // live 07.09), so the grid showed four indistinguishable cards. The seller's real listing
+    // title is the last entry of the breadcrumb JSON-LD ("... Golf GTI Performance *ACC*Pano*");
+    // prefer that, fall back to the de-chromed <title> only when it's missing.
     if (new URL(url).hostname.endsWith("autoscout24.de")) {
+      const crumb = html.match(/"@type":"ListItem","position":\d+,"name":"([^"]+)"\}\]\}/)?.[1];
       const htmlTitle = html.match(/<title>([^<]*)<\/title>/)?.[1]?.trim();
-      if (htmlTitle) {
-        title = htmlTitle
+      const best = crumb ?? htmlTitle;
+      if (best) {
+        title = best
           .replace(/\s+gebraucht\s+(kaufen\s+)?in\s+.+$/i, "")
           .replace(/\s+für\s+€\s*[\d.,]+\s*$/i, "")
+          .replace(/\s*\*+\s*/g, " ") // sellers pad titles with *ASTERISK*SPAM*
           .trim();
       }
     }
