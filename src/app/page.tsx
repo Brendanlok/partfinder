@@ -12,6 +12,7 @@ import { filterNew, markSeen, SEEN_LISTINGS_KEY } from "@/lib/seenListings";
 import { toggleHidden, HIDDEN_LISTINGS_KEY } from "@/lib/hiddenListings";
 import { parseMileage } from "@/lib/mileage";
 import { pushRecentSearch } from "@/lib/recentSearches";
+import { parsePriceLimit } from "@/lib/priceLimit";
 import { cleanMatchTags, translateTag } from "@/lib/matchTags";
 import { cleanListingTitle } from "@/lib/listingTitle";
 import { daysAgo } from "@/lib/age";
@@ -965,6 +966,12 @@ export default function Home() {
           }))
         : data.listings;
       setListings(taggedListings);
+      // The query often states a budget ("... under 20k", "bis 15.000 €") - pre-fill the
+      // max-price box from it so the grid filters to that ceiling instead of leaving the
+      // box empty next to a query that clearly asked for one. Visible and editable; the
+      // user can clear it. Mileage caps ("under 80k km") are deliberately not parsed here.
+      const priceLimit = parsePriceLimit(want);
+      if (priceLimit !== null) setMaxPrice(String(priceLimit));
       const nextRecent = pushRecentSearch(recentSearches, want);
       setRecentSearches(nextRecent);
       // Diff this search's prices against every price we've ever seen for these listings,
