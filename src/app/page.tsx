@@ -1084,6 +1084,16 @@ export default function Home() {
   const sortedListings = hideDuplicates
     ? pickRepresentatives(sortedAndFilteredListings, duplicates)
     : sortedAndFilteredListings;
+  // Whether any user-set filter is narrowing the view. Drives the empty-state copy: an
+  // empty grid with no active filter means every card was dismissed, not filtered - the
+  // "N hidden - show" toggle is the fix then, and "Clear filters" would be a dead button.
+  const anyActiveFilter =
+    sourceFilter.size > 0 ||
+    fuelFilter.size > 0 ||
+    !!minPrice ||
+    !!maxPrice ||
+    showOnlyNew ||
+    hideDuplicates;
   // Gate both the map toggle and the map itself on this - `mapView` is sticky across
   // searches, so without it a search whose results carry no location would render the
   // map (0 pins) with its "back to list" toggle hidden, trapping the user in map view.
@@ -1421,7 +1431,7 @@ export default function Home() {
               )}
             </div>
 
-            {sortedListings.length === 0 && (
+            {sortedListings.length === 0 && anyActiveFilter && (
               <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
                 {t.noResultsFilters}{" "}
                 <button
@@ -1432,11 +1442,18 @@ export default function Home() {
                     setMinPrice("");
                     setMaxPrice("");
                     setShowOnlyNew(false);
+                    setHideDuplicates(false);
                   }}
                   className="font-medium text-black underline decoration-zinc-400 underline-offset-2 dark:text-zinc-50"
                 >
                   {t.clearFilters}
                 </button>
+              </p>
+            )}
+
+            {sortedListings.length === 0 && !anyActiveFilter && (
+              <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+                {t.allDismissed}
               </p>
             )}
 

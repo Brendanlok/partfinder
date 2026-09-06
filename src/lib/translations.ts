@@ -45,6 +45,7 @@ type Dict = {
   shareListing: string;
   copied: string;
   noResultsFilters: string;
+  allDismissed: string;
   clearFilters: string;
   showingOf: (shown: number, total: number) => string;
   priceRange: (low: string, high: string, typical: string) => string;
@@ -219,6 +220,7 @@ export const translations: Record<Lang, Dict> = {
     shareListing: "🔗 Share this car",
     copied: "Copied!",
     noResultsFilters: "No results match these filters.",
+    allDismissed: "You've dismissed every listing from this search. Use the “show” link above to bring them back.",
     clearFilters: "Clear filters",
     showingOf: (shown, total) => `Showing ${shown} of ${total} listings`,
     priceRange: (low, high, typical) => `${low}–${high} · typical ${typical}`,
@@ -397,6 +399,7 @@ export const translations: Record<Lang, Dict> = {
     shareListing: "🔗 Dieses Auto teilen",
     copied: "Kopiert!",
     noResultsFilters: "Keine Ergebnisse mit diesen Filtern.",
+    allDismissed: "Du hast alle Anzeigen aus dieser Suche ausgeblendet. Über den Link „anzeigen“ oben holst du sie zurück.",
     clearFilters: "Filter zurücksetzen",
     showingOf: (shown, total) => `${shown} von ${total} Anzeigen`,
     priceRange: (low, high, typical) => `${low}–${high} · üblich ${typical}`,
