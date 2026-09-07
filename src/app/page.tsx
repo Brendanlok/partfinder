@@ -970,8 +970,18 @@ export default function Home() {
       // max-price box from it so the grid filters to that ceiling instead of leaving the
       // box empty next to a query that clearly asked for one. Visible and editable; the
       // user can clear it. Mileage caps ("under 80k km") are deliberately not parsed here.
+      // But only when at least one result would survive that cap - an unrealistic budget
+      // ("BMW estate under 3000" when the cheapest found is 17k) would otherwise hide every
+      // result behind a filter the app applied itself, leaving a bare "No results" dead-end.
       const priceLimit = parsePriceLimit(want);
-      if (priceLimit !== null) setMaxPrice(String(priceLimit));
+      const listingsForLimit: Listing[] = Array.isArray(taggedListings) ? taggedListings : [];
+      const anySurvivesLimit =
+        priceLimit !== null &&
+        listingsForLimit.some((l) => {
+          const p = parsePrice(l.price);
+          return p === null || p <= priceLimit;
+        });
+      if (anySurvivesLimit) setMaxPrice(String(priceLimit));
       const nextRecent = pushRecentSearch(recentSearches, want);
       setRecentSearches(nextRecent);
       // Diff this search's prices against every price we've ever seen for these listings,
