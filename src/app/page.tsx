@@ -975,11 +975,14 @@ export default function Home() {
       // result behind a filter the app applied itself, leaving a bare "No results" dead-end.
       const priceLimit = parsePriceLimit(want);
       const listingsForLimit: Listing[] = Array.isArray(taggedListings) ? taggedListings : [];
+      // Needs a *known* price at or under the cap - a null price (kleinanzeigen "VB"
+      // listings) isn't evidence the budget is realistic, and counting it as surviving
+      // let an unreachable budget still pre-fill the cap and hide every real-priced car.
       const anySurvivesLimit =
         priceLimit !== null &&
         listingsForLimit.some((l) => {
           const p = parsePrice(l.price);
-          return p === null || p <= priceLimit;
+          return p !== null && p <= priceLimit;
         });
       if (anySurvivesLimit) setMaxPrice(String(priceLimit));
       const nextRecent = pushRecentSearch(recentSearches, want);
