@@ -26,6 +26,11 @@ assert.strictEqual(parsePriceLimit("under 2.0 TDI"), null);
 assert.strictEqual(parsePriceLimit("manual under 20"), null); // bare 2-digit, could be anything
 assert.strictEqual(parsePriceLimit("Golf GTI"), null);
 
+// A bare 4-digit number in the model-year range is a year filter, not a budget.
+assert.strictEqual(parsePriceLimit("Audi A4 Avant bis 2015"), null);
+assert.strictEqual(parsePriceLimit("BMW 3er unter 2020"), null);
+assert.strictEqual(parsePriceLimit("Kombi bis 2.015 €"), 2015); // grouped -> still a budget
+
 // Implausible amounts are rejected.
 assert.strictEqual(parsePriceLimit("under 300"), null);
 assert.strictEqual(parsePriceLimit("bis 2.000.000"), null);

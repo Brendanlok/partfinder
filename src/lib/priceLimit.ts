@@ -21,9 +21,16 @@ export function parsePriceLimit(query: string): number | null {
   let n = grouped ? Number(digits.replace(/[.,]/g, "")) : Number(digits.replace(",", "."));
   if (!Number.isFinite(n)) return null;
   if (m[2]) n *= 1000; // explicit "k" / "tsd"
-  // A bare 1-3 digit number ("under 20") is too ambiguous to guess a budget from -
-  // only act on a value that's already a plausible euro amount or was grouped/k-suffixed.
-  else if (n < 1000) return null;
+  else if (n < 1000) {
+    // A bare 1-3 digit number ("under 20") is too ambiguous to guess a budget from -
+    // only act on a value that's already a plausible euro amount or was grouped/k-suffixed.
+    return null;
+  } else if (!grouped && n >= 1990 && n <= 2035) {
+    // "Audi A4 Avant bis 2015" / "3er unter 2020" - a bare 4-digit number in the
+    // model-year range after under/bis is far more likely a year filter than a
+    // sub-2000 EUR budget. Leave the box empty rather than hiding every priced car.
+    return null;
+  }
 
   n = Math.round(n);
   // Outside a plausible used-car asking price - probably matched something else
