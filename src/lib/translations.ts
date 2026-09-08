@@ -47,6 +47,7 @@ type Dict = {
   noResultsFilters: string;
   allDismissed: string;
   clearFilters: string;
+  matchCount: (n: number) => string;
   showingOf: (shown: number, total: number) => string;
   priceRange: (low: string, high: string, typical: string) => string;
   lastChecked: (days: number) => string;
@@ -222,6 +223,7 @@ export const translations: Record<Lang, Dict> = {
     noResultsFilters: "No results match these filters.",
     allDismissed: "You've dismissed every listing from this search. Use the “show” link above to bring them back.",
     clearFilters: "Clear filters",
+    matchCount: (n) => `${n} ${n === 1 ? "match" : "matches"}`,
     showingOf: (shown, total) => `Showing ${shown} of ${total} listings`,
     priceRange: (low, high, typical) => `${low}–${high} · typical ${typical}`,
     lastChecked: (days) => `Prices last checked ${days === 1 ? "yesterday" : `${days} days ago`}`,
@@ -401,6 +403,7 @@ export const translations: Record<Lang, Dict> = {
     noResultsFilters: "Keine Ergebnisse mit diesen Filtern.",
     allDismissed: "Du hast alle Anzeigen aus dieser Suche ausgeblendet. Über den Link „anzeigen“ oben holst du sie zurück.",
     clearFilters: "Filter zurücksetzen",
+    matchCount: (n) => `${n} Treffer`,
     showingOf: (shown, total) => `${shown} von ${total} Anzeigen`,
     priceRange: (low, high, typical) => `${low}–${high} · üblich ${typical}`,
     lastChecked: (days) => `Preise zuletzt ${days === 1 ? "gestern" : `vor ${days} Tagen`} geprüft`,

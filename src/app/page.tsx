@@ -1329,7 +1329,12 @@ export default function Home() {
 
         {displayedListings && displayedListings.length > 0 && (
           <>
-            <div className="mt-6 flex flex-wrap items-center gap-3">
+            {!showSaved && (
+              <p className="mt-6 text-sm font-medium text-black dark:text-zinc-50">
+                {t.matchCount(displayedListings.length)}
+              </p>
+            )}
+            <div className={`${showSaved ? "mt-6" : "mt-3"} flex flex-wrap items-center gap-3`}>
               <select
                 value={effectiveSort}
                 onChange={(e) => setSortBy(e.target.value as SortOption)}
