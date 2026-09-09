@@ -1123,6 +1123,10 @@ export default function Home() {
   const hiddenInResults = !showSaved
     ? (listings ?? []).filter((l) => hidden.has(l.url)).length
     : 0;
+  // Every result from this search is dismissed - clearing filters can't help, so the
+  // empty state must point at the "show" link rather than offering a dead "Clear filters".
+  const allResultsDismissed =
+    !showSaved && (listings?.length ?? 0) > 0 && hiddenInResults === listings!.length;
 
   // Step through the visible (sorted+filtered) list from inside the detail modal, so a
   // phone user browsing many cars doesn't have to close and re-tap each card. All the
@@ -1219,6 +1223,7 @@ export default function Home() {
                 setMinPrice("");
                 setMaxPrice("");
                 setShowOnlyNew(false);
+                setHideDuplicates(false);
                 setCompareSet(new Set());
                 setShowCompare(false);
                 setShowSaved((s) => !s);
@@ -1456,7 +1461,7 @@ export default function Home() {
               )}
             </div>
 
-            {sortedListings.length === 0 && anyActiveFilter && (
+            {sortedListings.length === 0 && anyActiveFilter && !allResultsDismissed && (
               <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
                 {t.noResultsFilters}{" "}
                 <button
@@ -1476,7 +1481,7 @@ export default function Home() {
               </p>
             )}
 
-            {sortedListings.length === 0 && !anyActiveFilter && (
+            {sortedListings.length === 0 && (!anyActiveFilter || allResultsDismissed) && (
               <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
                 {t.allDismissed}
               </p>
