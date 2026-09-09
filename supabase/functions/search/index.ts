@@ -1,6 +1,7 @@
 // Runs server-side on Supabase Edge Functions (Deno). Keeps TAVILY_API_KEY / GEMINI_API_KEY
 // secret - only the anon/publishable key (safe to expose) reaches the static frontend.
 import { cleanListingTitle, looksLikeModelCar } from "./title.ts";
+import { kleinKeywords } from "./keywords.ts";
 
 const LISTING_SITES = ["mobile.de", "autoscout24.de", "kleinanzeigen.de"];
 
@@ -231,26 +232,12 @@ async function handleSearch(want: string): Promise<Response> {
   );
   // ponytail: Tavily's kleinanzeigen coverage is thin - for many car queries it surfaces
   // zero kleinanzeigen hubs, so the per-site quota above has nothing to crawl. kleinanzeigen's
-  // keyword search has a stable URL shape, so synthesize one and always crawl it. Its search
-  // ANDs every term and matches literally, so feed it only make/model words: the part before
-  // the first comma, minus prices/years/ranges and qualifier words a German ad title won't
-  // contain (confirmed live: the raw ask "VW Golf 7 GTI manual under 20000" returns zero, but
-  // "VW Golf GTI" returns 27). No extra API call; Gemini drops the loose matches downstream.
-  const KLEIN_STOP = new Set(
-    "manual automatic auto petrol gasoline diesel hybrid electric awd 4wd quattro under over below above max min good great excellent mint clean cheap budget around about approx roughly low high mileage miles year years old new from with without and or the near condition"
-      .split(" ")
-  );
-  const kleinKeywords = want
-    .split(",")[0]
-    .split(/\s+/)
-    .filter(
-      (w: string) =>
-        w.length > 1 && /[a-z]/i.test(w) && !/^\d[\d.,k-]*$/i.test(w) && !KLEIN_STOP.has(w.toLowerCase())
-    )
-    .slice(0, 4);
-  if (kleinKeywords.length > 0) {
+  // keyword search has a stable URL shape, so synthesize one and always crawl it (keyword
+  // extraction + reasoning in keywords.ts). No extra API call; Gemini drops loose matches.
+  const kleinTerms = kleinKeywords(want);
+  if (kleinTerms.length > 0) {
     hubUrls.unshift(
-      `https://www.kleinanzeigen.de/s-autos/c216?keywords=${encodeURIComponent(kleinKeywords.join(" "))}`
+      `https://www.kleinanzeigen.de/s-autos/c216?keywords=${encodeURIComponent(kleinTerms.join(" "))}`
     );
   }
   // ponytail: interleave hubs (one URL from each before any hub's second), not flat concat -
