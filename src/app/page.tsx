@@ -1041,6 +1041,10 @@ export default function Home() {
   const availableFuels = displayedListings
     ? [...new Set(displayedListings.map((l) => l.fuel).filter((f): f is string => !!f))]
     : [];
+  // How many of the current results each source/fuel checkbox accounts for - shown next to
+  // the label so the split ("kleinanzeigen 5 · autoscout24 1") is visible before unchecking.
+  const countIn = (pred: (l: Listing) => boolean) =>
+    displayedListings ? displayedListings.filter(pred).length : 0;
   // Only offer a sort the current results can actually act on - listings often come back
   // with no year/mileage (autoscout24 snippets are thin), and an option that silently
   // does nothing when picked just looks broken.
@@ -1378,7 +1382,7 @@ export default function Home() {
                     onChange={() => toggleSource(s)}
                     className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
                   />
-                  {s}
+                  {s} <span className="text-zinc-400 dark:text-zinc-500">{countIn((l) => l.source === s)}</span>
                 </label>
               ))}
               {availableFuels.length > 1 && availableFuels.map((f) => (
@@ -1389,7 +1393,7 @@ export default function Home() {
                     onChange={() => toggleFuel(f)}
                     className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
                   />
-                  {f}
+                  {f} <span className="text-zinc-400 dark:text-zinc-500">{countIn((l) => l.fuel === f)}</span>
                 </label>
               ))}
               <label
