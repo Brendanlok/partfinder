@@ -31,6 +31,11 @@ export function kleinKeywords(want: string): string[] {
       // model year, not a generation - leave those out. But not when the next token is
       // a unit ("184 PS", "90 kW") - that's a spec figure, not a generation.
       if (/^\d{1,3}$/.test(w)) return !KLEIN_UNIT.has((tokens[i + 1] ?? "").toLowerCase());
+      // Keep a lone letter when a 1-3 digit number follows it: that's a German-style
+      // class designation ("Mercedes C 200", "BMW X 3", "Audi A 3", "VW T 5"), which
+      // German ads write spaced. Dropping the letter left "Mercedes 200" and surfaced
+      // 1980s W123/W124 ads - same failure class as the Golf 7 -> Golf 5/6 bug.
+      if (/^[a-z]$/i.test(w) && /^\d{1,3}$/.test(tokens[i + 1] ?? "")) return true;
       // Otherwise require a real word: a letter, more than one char, no price/range
       // shape ("20000", "2.0", "80k").
       return w.length > 1 && /[a-z]/i.test(w) && !/^\d[\d.,k-]*$/i.test(w);

@@ -25,6 +25,12 @@ assert.deepStrictEqual(kleinKeywords("BMW 320d 190 PS Touring"), ["BMW", "320d",
 // Never more than 4 terms.
 assert.strictEqual(kleinKeywords("Mercedes C 200 AMG Line Kombi Automatik").length, 4);
 
+// A spaced German class designation keeps its letter ("C 200", not "200").
+assert.deepStrictEqual(kleinKeywords("Mercedes C 200 Kombi"), ["Mercedes", "C", "200", "Kombi"]);
+assert.deepStrictEqual(kleinKeywords("BMW X 3 xDrive"), ["BMW", "X", "3", "xDrive"]);
+// A lone letter with no number after it is still dropped (not a class marker).
+assert.deepStrictEqual(kleinKeywords("Audi A6 S line Avant"), ["Audi", "A6", "line", "Avant"]);
+
 // Only the part before the first comma is used.
 assert.deepStrictEqual(kleinKeywords("VW Polo 6R, Klima, 1. Hand"), ["VW", "Polo", "6R"]);
 
