@@ -28,6 +28,12 @@ Deno.serve(async (req: Request) => {
   if (!issue || typeof issue !== "string") {
     return Response.json({ error: "Missing issue description." }, { status: 400, headers: corsHeaders });
   }
+  // Same trust boundary as search/index.ts: verify_jwt is off, so a direct caller could
+  // paste an essay into issue/want and inflate the Gemini + YouTube prompt on the shared
+  // free-tier quota. The frontend never sends anything near this long.
+  if (issue.length > 300 || (typeof want === "string" && want.length > 300)) {
+    return Response.json({ error: "Request too long." }, { status: 400, headers: corsHeaders });
+  }
 
   // Everything below calls out to Gemini/YouTube - a network blip there throwing uncaught
   // would skip corsHeaders entirely (Deno's default error response has none), so the

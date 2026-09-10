@@ -84,8 +84,14 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: "Invalid request." }, { status: 400, headers: corsHeaders });
   }
   const { url, want } = body;
-  if (!url || typeof url !== "string") {
+  if (!url || typeof url !== "string" || url.length > 2000) {
     return Response.json({ error: "Missing listing URL." }, { status: 400, headers: corsHeaders });
+  }
+  // Same trust boundary as search/index.ts: verify_jwt is off, so a direct caller could
+  // paste an essay into want and inflate the Gemini prompt on the shared free-tier quota.
+  // The frontend only ever sends the original search text (maxLength 200).
+  if (typeof want === "string" && want.length > 300) {
+    return Response.json({ error: "Request too long." }, { status: 400, headers: corsHeaders });
   }
 
   let hostname: string;

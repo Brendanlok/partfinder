@@ -120,6 +120,12 @@ Deno.serve(async (req: Request) => {
   if (!Array.isArray(issues) || issues.length === 0 || !issues.every((i) => typeof i === "string")) {
     return Response.json({ error: "Missing issues." }, { status: 400, headers: corsHeaders });
   }
+  // Same trust boundary as search/index.ts: verify_jwt is off, so a direct caller could
+  // paste essays into issues[]/want and inflate the Tavily + Gemini prompt on the shared
+  // free-tier quota. The frontend only sends short condition-check issue phrases.
+  if ((issues as string[]).some((i) => i.length > 300) || (typeof want === "string" && want.length > 300)) {
+    return Response.json({ error: "Request too long." }, { status: 400, headers: corsHeaders });
+  }
   const capped = (issues as string[]).slice(0, MAX_PARTS);
   const carDescription = typeof want === "string" && want ? want : "a used car";
 
