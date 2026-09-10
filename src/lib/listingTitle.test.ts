@@ -21,4 +21,10 @@ assert.strictEqual(cleanListingTitle("Volkswagen Golf GTI Limousine in Weiß"), 
 // Never returns empty even if every segment looks like chrome.
 assert.strictEqual(cleanListingTitle("autoscout24.de"), "autoscout24.de");
 
+// Seller padding: asterisk emphasis runs and a stray trailing quote (live kleinanzeigen).
+assert.strictEqual(
+  cleanListingTitle('VW Golf 7 GTI TCR Akrapovic *Vollausstattung* ohne Panoramadach"'),
+  "VW Golf 7 GTI TCR Akrapovic Vollausstattung ohne Panoramadach"
+);
+
 console.log("listingTitle.test.ts: all checks passed");

@@ -22,6 +22,12 @@ assert.strictEqual(cleanListingTitle("Volkswagen Golf GTI Limousine in Weiß"), 
 // Degenerate "chrome only" title - fall back to the original rather than an empty string.
 assert.strictEqual(cleanListingTitle(" | kleinanzeigen.de"), " | kleinanzeigen.de");
 
+// Seller padding: asterisk emphasis runs and a stray trailing quote (live kleinanzeigen).
+assert.strictEqual(
+  cleanListingTitle('VW Golf 7 GTI TCR Akrapovic *Vollausstattung* ohne Panoramadach"'),
+  "VW Golf 7 GTI TCR Akrapovic Vollausstattung ohne Panoramadach",
+);
+
 // looksLikeModelCar: the live 03.09 junk results.
 assert.strictEqual(looksLikeModelCar("VW Golf 1 GTI 1977 Marsrot Solido 1:18 in schönem Zustand"), true);
 assert.strictEqual(looksLikeModelCar("Modellauto Volkswagen Golf GTI 1978 rot 1:43"), true);

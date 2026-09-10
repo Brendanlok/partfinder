@@ -9,7 +9,16 @@ export function cleanListingTitle(title: string): string {
   while (parts.length > 1 && /(?:\.de|kaufen)$/i.test(parts[parts.length - 1].trim())) {
     parts.pop();
   }
-  return parts.join(" | ").trim() || title;
+  const dechromed = parts.join(" | ").trim() || title;
+  // Sellers pad kleinanzeigen headlines with *ASTERISK*SPAM* and a stray trailing
+  // quote (confirmed live on the ranked path - the autoscout24-only asterisk strip
+  // in fetchListingSnippet misses these). Drop both so the card shows a clean name.
+  const depadded = dechromed
+    .replace(/\*+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/["'“”„]+$/, "")
+    .trimEnd();
+  return depadded || dechromed;
 }
 
 // kleinanzeigen's car category is full of 1:18/1:43 scale models and toys that share
