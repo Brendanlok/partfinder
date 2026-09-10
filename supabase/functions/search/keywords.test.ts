@@ -14,8 +14,13 @@ assert.deepStrictEqual(kleinKeywords("Porsche 911 997 Carrera"), ["Porsche", "91
 
 // Prices, years, ranges, engine sizes, buyer qualifiers all drop out.
 assert.deepStrictEqual(kleinKeywords("Audi A4 Avant bis 2015, diesel"), ["Audi", "A4", "Avant"]);
-assert.deepStrictEqual(kleinKeywords("Golf GTI 2.0 TSI under 80k km"), ["Golf", "GTI", "TSI", "km"]);
+assert.deepStrictEqual(kleinKeywords("Golf GTI 2.0 TSI under 80k km"), ["Golf", "GTI", "TSI"]);
 assert.deepStrictEqual(kleinKeywords("cheap clean manual estate"), ["estate"]);
+
+// A spec figure ("184 PS", "90 kW") is not a generation number - drop both the unit
+// and the number it trails, but keep a real generation number ("Golf 7").
+assert.deepStrictEqual(kleinKeywords("VW Golf GTI 245 PS"), ["VW", "Golf", "GTI"]);
+assert.deepStrictEqual(kleinKeywords("BMW 320d 190 PS Touring"), ["BMW", "320d", "Touring"]);
 
 // Never more than 4 terms.
 assert.strictEqual(kleinKeywords("Mercedes C 200 AMG Line Kombi Automatik").length, 4);

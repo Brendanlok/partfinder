@@ -13,18 +13,24 @@ const KLEIN_STOP = new Set(
   ).split(/\s+/)
 );
 
+// Measurement units - never a car name, and a bare number right before one is a
+// mileage/power/displacement figure, not a generation ("80k km", "184 PS", "2.0 l").
+// Both the unit token itself and the number it trails get dropped.
+const KLEIN_UNIT = new Set("km kilometer kilometers mile miles ps hp kw nm l ltr liter litre".split(" "));
+
 export function kleinKeywords(want: string): string[] {
-  return want
-    .split(",")[0]
-    .split(/\s+/)
-    .filter((w) => {
-      if (KLEIN_STOP.has(w.toLowerCase())) return false;
+  const tokens = want.split(",")[0].split(/\s+/);
+  return tokens
+    .filter((w, i) => {
+      const lc = w.toLowerCase();
+      if (KLEIN_STOP.has(lc) || KLEIN_UNIT.has(lc)) return false;
       // Keep a bare 1-3 digit token - a generation / series / trim number (Golf "7",
       // BMW "320", Porsche "911"), the word that pins the search to the right car.
       // Confirmed live: dropping it made "VW Golf 7 GTI ..." crawl "VW Golf GTI" and
       // surface Golf 5/6 ads as the only in-budget results. A 4-digit bare number is a
-      // model year, not a generation - leave those out.
-      if (/^\d{1,3}$/.test(w)) return true;
+      // model year, not a generation - leave those out. But not when the next token is
+      // a unit ("184 PS", "90 kW") - that's a spec figure, not a generation.
+      if (/^\d{1,3}$/.test(w)) return !KLEIN_UNIT.has((tokens[i + 1] ?? "").toLowerCase());
       // Otherwise require a real word: a letter, more than one char, no price/range
       // shape ("20000", "2.0", "80k").
       return w.length > 1 && /[a-z]/i.test(w) && !/^\d[\d.,k-]*$/i.test(w);
